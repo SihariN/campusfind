@@ -54,15 +54,29 @@ export default function ReportPage() {
     };
 
     try {
-      const response = await fetch(`${API_BASE}/items`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+  const token = localStorage.getItem("campusfind_token");
 
-      const data = await response.json().catch(() => null);
+  if (!token) {
+    setError("Please log in before reporting an item.");
+    return;
+  }
+
+  const response = await fetch(`${API_BASE}/items`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (response.status === 401) {
+    localStorage.removeItem("campusfind_token");
+    setError("Your session has expired. Please log in again.");
+    return;
+  }
 
       if (!response.ok) {
         const detail = data?.detail;

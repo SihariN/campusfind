@@ -12,7 +12,7 @@ from app import models
 from app.models import Item, User
 from app.schemas import ItemCreate, ItemRead, UserCreate, UserRead, UserLogin, TokenResponse
 from sqlalchemy.exc import IntegrityError
-from app.auth import hash_password, verify_password, create_access_token
+from app.auth import hash_password, verify_password, create_access_token, get_current_user
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -87,29 +87,28 @@ def list_items(
     return db.scalars(statement).all()
 
 
-@app.post(
-    "/items",
-    response_model=ItemRead,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_item(payload: ItemCreate, db: DbSession):
+
+@app.post("/items", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
+def create_item(
+    payload: ItemCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
     item = Item(
         title=payload.title,
+        user_id=current_user.id,
         description=payload.description,
         category=payload.category,
         location=payload.location,
         item_type=payload.item_type,
-        image_url=(
-            str(payload.image_url) if payload.image_url else None
-        ),
+        image_url=str(payload.image_url) if payload.image_url else None,
         status="open",
     )
-
     db.add(item)
     db.commit()
     db.refresh(item)
-
     return item
+
 
 
 @app.get("/items/{item_id}", response_model=ItemRead)

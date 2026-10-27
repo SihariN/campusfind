@@ -1,8 +1,8 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, Integer, String, Text, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -13,6 +13,13 @@ class Item(Base):
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True
     )
+
+    user_id: Mapped[int | None] = mapped_column(
+    ForeignKey("users.id"),
+    nullable=True,
+    )
+
+    owner: Mapped["User | None"] = relationship()
 
     title: Mapped[str] = mapped_column(
         String(120), nullable=False

@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getItems } from "../lib/api";
 
@@ -16,11 +17,17 @@ const categories = [
 
 export default function Home() {
   const [items, setItems] = useState([]);
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [search, setSearch] = useState("");
   const [itemType, setItemType] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+  setIsLoggedIn(Boolean(localStorage.getItem("campusfind_token")));
+}, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,27 +84,48 @@ export default function Home() {
           </Link>
           
             <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href="/login"
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700"
-              >
-                Log in
-              </Link>
+  {isLoggedIn ? (
+    <>
+      <span className="px-3 py-2 text-sm font-medium text-gray-700">
+        Logged in
+      </span>
 
-              <Link
-                href="/register"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md"
-              >
-                Sign up
-              </Link>
+      <button
+        onClick={() => {
+          localStorage.removeItem("campusfind_token");
+          setIsLoggedIn(false);
+          router.refresh();
+        }}
+        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+      >
+        Log out
+      </button>
+    </>
+  ) : (
+    <>
+      <Link
+        href="/login"
+        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700"
+      >
+        Log in
+      </Link>
 
-              <Link
-                href="/report"
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md"
-              >
-                + Report an item
-              </Link>
-            </div>
+      <Link
+        href="/register"
+        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+      >
+        Sign up
+      </Link>
+    </>
+  )}
+
+  <Link
+    href="/report"
+    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+  >
+    + Report an item
+  </Link>
+</div>
 
         </div>
       </header>

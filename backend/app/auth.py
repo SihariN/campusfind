@@ -6,6 +6,17 @@ import jwt
 from dotenv import load_dotenv
 from pwdlib import PasswordHash
 
+
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import User
+
+
 load_dotenv()
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
@@ -37,3 +48,45 @@ def create_access_token(user_id: int) -> str:
     }
 
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+security = HTTPBearer(auto_error=False)
+
+
+def get_current_user(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(security),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+        )
+        user_id = int(payload["sub"])
+    except (jwt.InvalidTokenError, KeyError, TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.get(User, user_id)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
