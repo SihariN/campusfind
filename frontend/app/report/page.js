@@ -271,10 +271,31 @@ export default function ReportPage() {
           </div>
 
           {error && (
-            <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+  <div
+    role="alert"
+    className="rounded-xl bg-red-50 p-4 text-sm text-red-700"
+  >
+    <p>{error}</p>
+
+    {error.toLowerCase().includes("log in") && (
+      <Link
+        href="/login"
+        className="mt-2 inline-block font-semibold underline"
+      >
+        Go to login →
+      </Link>
+    )}
+
+    {error.toLowerCase().includes("session has expired") && (
+      <Link
+        href="/login"
+        className="mt-2 inline-block font-semibold underline"
+      >
+        Log in again →
+      </Link>
+    )}
+  </div>
+)}
 
           {success && (
             <div role="status" className="rounded-xl bg-green-50 p-4 text-sm text-green-800">
