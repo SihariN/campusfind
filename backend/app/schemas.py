@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, EmailStr
 
 
 class ItemCreate(BaseModel):
@@ -26,3 +26,23 @@ class ItemRead(BaseModel):
     item_type: str
     image_url: str | None
     created_at: datetime
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: SecretStr = Field(min_length=8, max_length=128)
+
+
+class UserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: EmailStr
+    created_at: datetime
+    
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: SecretStr
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

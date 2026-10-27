@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.database import Base, engine, get_db
 from app import models
-from app.models import Item
-from app.schemas import ItemCreate, ItemRead
-
+from app.models import Item, User
+from app.schemas import ItemCreate, ItemRead, UserCreate, UserRead, UserLogin, TokenResponse
+from sqlalchemy.exc import IntegrityError
+from app.auth import hash_password, verify_password, create_access_token
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -122,3 +123,68 @@ def get_item(item_id: int, db: DbSession):
         )
 
     return item
+
+@app.post(
+    "/auth/register",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_user(payload: UserCreate, db: DbSession):
+    email = str(payload.email).strip().lower()
+
+    existing_user = db.scalar(
+        select(User).where(User.email == email)
+    )
+    if existing_user:
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this email already exists",
+        )
+
+    user = User(
+        email=email,
+        hashed_password=hash_password(
+            payload.password.get_secret_value()
+        ),
+    )
+
+    db.add(user)
+
+    try:
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this email already exists",
+        )
+
+    return user
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+def login_user(payload: UserLogin, db: DbSession):
+    email = str(payload.email).strip().lower()
+
+    user = db.scalar(
+        select(User).where(User.email == email)
+    )
+
+    password = payload.password.get_secret_value()
+
+    if user is None or not verify_password(
+        password, user.hashed_password
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = create_access_token(user.id)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+    }
