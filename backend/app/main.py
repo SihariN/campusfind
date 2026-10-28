@@ -109,7 +109,18 @@ def create_item(
     db.refresh(item)
     return item
 
+@app.get("/items/mine", response_model=list[ItemRead])
+def get_my_items(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    statement = (
+        select(Item)
+        .where(Item.user_id == current_user.id)
+        .order_by(Item.created_at.desc())
+    )
 
+    return db.scalars(statement).all()
 
 @app.get("/items/{item_id}", response_model=ItemRead)
 def get_item(item_id: int, db: DbSession):
