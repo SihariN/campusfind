@@ -198,3 +198,46 @@ def login_user(payload: UserLogin, db: DbSession):
         "access_token": token,
         "token_type": "bearer",
     }
+
+@app.put("/items/{item_id}", response_model=ItemRead)
+def update_item(
+    item_id: int,
+    item_data: ItemCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    item = db.get(Item, item_id)
+
+    if item is None or item.user_id != current_user.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found.",
+        )
+
+    for field, value in item_data.model_dump().items():
+        setattr(item, field, value)
+
+    db.commit()
+    db.refresh(item)
+
+    return item
+
+
+@app.delete("/items/{item_id}")
+def delete_item(
+    item_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    item = db.get(Item, item_id)
+
+    if item is None or item.user_id != current_user.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found.",
+        )
+
+    db.delete(item)
+    db.commit()
+
+    return {"message": "Report deleted successfully."}
