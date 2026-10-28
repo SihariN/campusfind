@@ -84,6 +84,14 @@ export default function Home() {
           </Link>
           
             <div className="flex flex-wrap items-center gap-2">
+              {isLoggedIn && (
+  <Link
+    href="/my-reports"
+    className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+  >
+    My Reports
+  </Link>
+)}
   {isLoggedIn ? (
     <>
       <span className="px-3 py-2 text-sm font-medium text-gray-700">
