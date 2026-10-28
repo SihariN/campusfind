@@ -35,7 +35,25 @@ export default function MyReportsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
+  const [notificationVersion, setNotificationVersion] = useState(0);
+
+  const showMessage = useCallback((text) => {
+    setMessage(text);
+    setNotificationVersion((version) => version + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!message) return;
+
+    const timer = setTimeout(() => {
+      setMessage("");
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [message, notificationVersion]);
+
   const loadMyReports = useCallback(async () => {
+
     const token = localStorage.getItem("campusfind_token");
 
     if (!token) {
@@ -152,7 +170,7 @@ export default function MyReportsPage() {
 
       setEditingId(null);
       setForm(emptyForm);
-      setMessage("Your report was updated successfully.");
+      showMessage("Your report was updated successfully.");
       await loadMyReports();
     } catch (err) {
       setError(err.message || "Could not update your report.");
@@ -203,7 +221,7 @@ export default function MyReportsPage() {
         setEditingId(null);
       }
 
-      setMessage("Your report was deleted successfully.");
+      showMessage("Your report was deleted successfully.");
     } catch (err) {
       setError(err.message || "Could not delete your report.");
     } finally {
@@ -266,7 +284,7 @@ async function handleStatusChange(item) {
       )
     );
 
-    setMessage(
+    showMessage(
       nextStatus === "resolved"
         ? "Report marked as resolved successfully."
         : "Report reopened successfully."
@@ -290,11 +308,11 @@ async function handleStatusChange(item) {
             CampusFind
           </Link>
 
-          <nav className="flex flex-wrap items-center gap-3 text-sm font-medium">
-            <Link href="/" className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">
+          <nav className="flex flex-wrap items-center gap-3 text-sm font-medium ">
+            <Link href="/" className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 border border-gray-300 dark:border-gray-600">
               Home
             </Link>
-            <Link href="/report" className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">
+            <Link href="/report" className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 border border-gray-300 dark:border-gray-600">
               Report an item
             </Link>
             <button onClick={handleLogout} className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-100">
@@ -318,13 +336,19 @@ async function handleStatusChange(item) {
         </div>
 
         {message && (
-          <div role="status" className="mb-5 rounded-xl bg-green-50 p-4 text-sm text-green-800">
+        <div
+            role="status"
+            className="mb-5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 transition-colors dark:border-green-800 dark:bg-green-950/50 dark:text-green-300"
+        >
             {message}
-          </div>
+        </div>
         )}
 
         {error && (
-          <div role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-800">
+          <div
+            role="alert"
+            className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 transition-colors dark:border-red-800 dark:bg-red-950/50 dark:text-red-300"
+          >
             <p>{error}</p>
             {error.toLowerCase().includes("log in") && (
               <Link href="/login" className="mt-2 inline-block font-semibold underline">
@@ -450,24 +474,36 @@ async function handleStatusChange(item) {
 
                           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
                             
+                            
                             <button
                             type="button"
                             onClick={() => handleStatusChange(item)}
-                            className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
                                 item.status === "resolved"
-                                ? "bg-amber-50 text-amber-800 hover:bg-amber-100"
-                                : "bg-green-50 text-green-800 hover:bg-green-100"
+                                ? "bg-amber-50 text-amber-800 hover:bg-amber-100 focus-visible:outline-amber-500 dark:bg-amber-400/15 dark:text-amber-300 dark:hover:bg-amber-400/25 dark:focus-visible:outline-amber-400"
+                                : "bg-green-50 text-green-800 hover:bg-green-100 focus-visible:outline-green-500 dark:bg-emerald-400/15 dark:text-emerald-300 dark:hover:bg-emerald-400/25 dark:focus-visible:outline-emerald-400"
                             }`}
                             >
                             {item.status === "resolved" ? "Reopen" : "Mark resolved"}
                             </button>
 
-                            <button type="button" onClick={() => startEditing(item)} className="rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
-                              Edit
+                            <button
+                            type="button"
+                            onClick={() => startEditing(item)}
+                            className="rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-blue-400/15 dark:text-blue-300 dark:hover:bg-blue-400/25 dark:focus-visible:outline-blue-400"
+                            >
+                            Edit
                             </button>
-                            <button type="button" onClick={() => handleDelete(item)} disabled={deletingId === item.id} className="rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60">
-                              {deletingId === item.id ? "Deleting..." : "Delete"}
+
+                            <button
+                            type="button"
+                            onClick={() => handleDelete(item)}
+                            disabled={deletingId === item.id}
+                            className="rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:bg-red-400/15 dark:text-red-300 dark:hover:bg-red-400/25 dark:focus-visible:outline-red-400"
+                            >
+                            {deletingId === item.id ? "Deleting..." : "Delete"}
                             </button>
+
                           </div>
                         </>
                       )}
