@@ -211,6 +211,72 @@ export default function MyReportsPage() {
     }
   }
 
+  
+async function handleStatusChange(item) {
+  const nextStatus = item.status === "resolved" ? "open" : "resolved";
+
+  const actionMessage =
+    nextStatus === "resolved"
+      ? item.item_type === "lost"
+        ? "mark this item as returned"
+        : "mark this item as claimed"
+      : "reopen this report";
+
+  if (!window.confirm(`Are you sure you want to ${actionMessage}?`)) {
+    return;
+  }
+
+  const token = localStorage.getItem("campusfind_token");
+
+  if (!token) {
+    setError("Please log in again to update your report.");
+    return;
+  }
+
+  setError("");
+  setMessage("");
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/items/${item.id}/status`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      }
+    );
+
+    const data = await response.json().catch(() => null);
+
+    if (response.status === 401) {
+      localStorage.removeItem("campusfind_token");
+      throw new Error("Your session has expired. Please log in again.");
+    }
+
+    if (!response.ok) {
+      throw new Error(data?.detail || "Could not update the report status.");
+    }
+
+    setItems((current) =>
+      current.map((entry) =>
+        entry.id === item.id ? { ...entry, status: data.status } : entry
+      )
+    );
+
+    setMessage(
+      nextStatus === "resolved"
+        ? "Report marked as resolved successfully."
+        : "Report reopened successfully."
+    );
+  } catch (err) {
+    setError(err.message || "Could not update the report status.");
+  }
+}
+
+
   function handleLogout() {
     localStorage.removeItem("campusfind_token");
     window.location.href = "/login";
@@ -383,6 +449,19 @@ export default function MyReportsPage() {
                           </div>
 
                           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                            
+                            <button
+                            type="button"
+                            onClick={() => handleStatusChange(item)}
+                            className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                                item.status === "resolved"
+                                ? "bg-amber-50 text-amber-800 hover:bg-amber-100"
+                                : "bg-green-50 text-green-800 hover:bg-green-100"
+                            }`}
+                            >
+                            {item.status === "resolved" ? "Reopen" : "Mark resolved"}
+                            </button>
+
                             <button type="button" onClick={() => startEditing(item)} className="rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
                               Edit
                             </button>

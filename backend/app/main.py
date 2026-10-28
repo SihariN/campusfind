@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import Base, engine, get_db
 from app import models
 from app.models import Item, User
-from app.schemas import ItemCreate, ItemRead, UserCreate, UserRead, UserLogin, TokenResponse
+from app.schemas import ItemCreate, ItemRead, UserCreate, UserRead, UserLogin, TokenResponse, ItemStatusUpdate
 from sqlalchemy.exc import IntegrityError
 from app.auth import hash_password, verify_password, create_access_token, get_current_user
 
@@ -241,3 +241,25 @@ def delete_item(
     db.commit()
 
     return {"message": "Report deleted successfully."}
+
+
+@app.patch("/items/{item_id}/status", response_model=ItemRead)
+def update_item_status(
+    item_id: int,
+    status_data: ItemStatusUpdate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    item = db.get(Item, item_id)
+
+    if item is None or item.user_id != current_user.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found.",
+        )
+
+    item.status = status_data.status
+    db.commit()
+    db.refresh(item)
+
+    return item

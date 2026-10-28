@@ -46,3 +46,6 @@ class UserLogin(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    
+class ItemStatusUpdate(BaseModel):
+    status: Literal["open", "resolved"]
