@@ -7,6 +7,9 @@ import Link from "next/link";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
 const categories = [
   "Electronics",
   "Accessories",
@@ -35,6 +38,11 @@ export default function MyReportsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [removeImage, setRemoveImage] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   const [notificationVersion, setNotificationVersion] = useState(0);
 
   const showMessage = useCallback((text) => {
@@ -52,8 +60,15 @@ export default function MyReportsPage() {
     return () => clearTimeout(timer);
   }, [message, notificationVersion]);
 
-  const loadMyReports = useCallback(async () => {
+  useEffect(() => {
+    return () => {
+      if (imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
+  const loadMyReports = useCallback(async () => {
     const token = localStorage.getItem("campusfind_token");
 
     if (!token) {
@@ -103,6 +118,10 @@ export default function MyReportsPage() {
       item_type: item.item_type || "lost",
       image_url: item.image_url || "",
     });
+
+    setSelectedImage(null);
+    setImagePreview(item.image_url || "");
+    setRemoveImage(false);
     setError("");
     setMessage("");
   }
@@ -110,6 +129,9 @@ export default function MyReportsPage() {
   function cancelEditing() {
     setEditingId(null);
     setForm(emptyForm);
+    setSelectedImage(null);
+    setImagePreview("");
+    setRemoveImage(false);
     setError("");
   }
 
@@ -119,10 +141,85 @@ export default function MyReportsPage() {
     setError("");
   }
 
+  function handleImageChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    setError("");
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError("Please choose a JPEG, PNG, or WebP image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setError("The image must be 5 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+    setRemoveImage(false);
+  }
+
+  function handleRemoveImage() {
+    setSelectedImage(null);
+    setImagePreview("");
+    setRemoveImage(true);
+    setError("");
+  }
+
+  async function uploadSelectedImage(token) {
+    const imageData = new FormData();
+    imageData.append("file", selectedImage);
+
+    setUploadingImage(true);
+
+    try {
+      const response = await fetch(`${API_BASE}/uploads/image`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: imageData,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (response.status === 401) {
+        localStorage.removeItem("campusfind_token");
+        throw new Error("Your session has expired. Please log in again.");
+      }
+
+      if (!response.ok) {
+        const detail = data?.detail;
+        const validationMessage = Array.isArray(detail)
+          ? detail.map((issue) => issue.msg).join(", ")
+          : detail;
+
+        throw new Error(
+          validationMessage || "Could not upload the image."
+        );
+      }
+
+      if (!data?.image_url) {
+        throw new Error("The upload did not return an image URL.");
+      }
+
+      return data.image_url;
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   async function handleSave(event) {
     event.preventDefault();
 
     const token = localStorage.getItem("campusfind_token");
+
     if (!token) {
       setError("Please log in again to edit your report.");
       return;
@@ -132,23 +229,28 @@ export default function MyReportsPage() {
     setError("");
     setMessage("");
 
-    const payload = {
-      ...form,
-      image_url: form.image_url.trim() || null,
-    };
-
     try {
-      const response = await fetch(
-        `${API_BASE}/items/${editingId}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      let imageUrl = form.image_url || null;
+
+      if (removeImage) {
+        imageUrl = null;
+      } else if (selectedImage) {
+        imageUrl = await uploadSelectedImage(token);
+      }
+
+      const payload = {
+        ...form,
+        image_url: imageUrl,
+      };
+
+      const response = await fetch(`${API_BASE}/items/${editingId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
       const data = await response.json().catch(() => null);
 
@@ -170,6 +272,10 @@ export default function MyReportsPage() {
 
       setEditingId(null);
       setForm(emptyForm);
+      setSelectedImage(null);
+      setImagePreview("");
+      setRemoveImage(false);
+
       showMessage("Your report was updated successfully.");
       await loadMyReports();
     } catch (err) {
@@ -187,6 +293,7 @@ export default function MyReportsPage() {
     if (!confirmed) return;
 
     const token = localStorage.getItem("campusfind_token");
+
     if (!token) {
       setError("Please log in again to delete your report.");
       return;
@@ -218,7 +325,7 @@ export default function MyReportsPage() {
       );
 
       if (editingId === item.id) {
-        setEditingId(null);
+        cancelEditing();
       }
 
       showMessage("Your report was deleted successfully.");
@@ -229,71 +336,74 @@ export default function MyReportsPage() {
     }
   }
 
-  
-async function handleStatusChange(item) {
-  const nextStatus = item.status === "resolved" ? "open" : "resolved";
+  async function handleStatusChange(item) {
+    const nextStatus =
+      item.status === "resolved" ? "open" : "resolved";
 
-  const actionMessage =
-    nextStatus === "resolved"
-      ? item.item_type === "lost"
-        ? "mark this item as returned"
-        : "mark this item as claimed"
-      : "reopen this report";
-
-  if (!window.confirm(`Are you sure you want to ${actionMessage}?`)) {
-    return;
-  }
-
-  const token = localStorage.getItem("campusfind_token");
-
-  if (!token) {
-    setError("Please log in again to update your report.");
-    return;
-  }
-
-  setError("");
-  setMessage("");
-
-  try {
-    const response = await fetch(
-      `${API_BASE}/items/${item.id}/status`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: nextStatus }),
-      }
-    );
-
-    const data = await response.json().catch(() => null);
-
-    if (response.status === 401) {
-      localStorage.removeItem("campusfind_token");
-      throw new Error("Your session has expired. Please log in again.");
-    }
-
-    if (!response.ok) {
-      throw new Error(data?.detail || "Could not update the report status.");
-    }
-
-    setItems((current) =>
-      current.map((entry) =>
-        entry.id === item.id ? { ...entry, status: data.status } : entry
-      )
-    );
-
-    showMessage(
+    const actionMessage =
       nextStatus === "resolved"
-        ? "Report marked as resolved successfully."
-        : "Report reopened successfully."
-    );
-  } catch (err) {
-    setError(err.message || "Could not update the report status.");
-  }
-}
+        ? item.item_type === "lost"
+          ? "mark this item as returned"
+          : "mark this item as claimed"
+        : "reopen this report";
 
+    if (!window.confirm(`Are you sure you want to ${actionMessage}?`)) {
+      return;
+    }
+
+    const token = localStorage.getItem("campusfind_token");
+
+    if (!token) {
+      setError("Please log in again to update your report.");
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/items/${item.id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: nextStatus }),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (response.status === 401) {
+        localStorage.removeItem("campusfind_token");
+        throw new Error("Your session has expired. Please log in again.");
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || "Could not update the report status."
+        );
+      }
+
+      setItems((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, status: data.status }
+            : entry
+        )
+      );
+
+      showMessage(
+        nextStatus === "resolved"
+          ? "Report marked as resolved successfully."
+          : "Report reopened successfully."
+      );
+    } catch (err) {
+      setError(err.message || "Could not update the report status.");
+    }
+  }
 
   function handleLogout() {
     localStorage.removeItem("campusfind_token");
@@ -304,18 +414,30 @@ async function handleStatusChange(item) {
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
-          <Link href="/" className="text-2xl font-bold tracking-tight text-blue-700">
+          <Link
+            href="/"
+            className="text-2xl font-bold tracking-tight text-blue-700"
+          >
             CampusFind
           </Link>
 
-          <nav className="flex flex-wrap items-center gap-3 text-sm font-medium ">
-            <Link href="/" className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 border border-gray-300 dark:border-gray-600">
+          <nav className="flex flex-wrap items-center gap-3 text-sm font-medium">
+            <Link
+              href="/"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-slate-600 hover:bg-slate-100 dark:border-gray-600"
+            >
               Home
             </Link>
-            <Link href="/report" className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 border border-gray-300 dark:border-gray-600">
+            <Link
+              href="/report"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-slate-600 hover:bg-slate-100 dark:border-gray-600"
+            >
               Report an item
             </Link>
-            <button onClick={handleLogout} className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-100">
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-100"
+            >
               Log out
             </button>
           </nav>
@@ -336,12 +458,12 @@ async function handleStatusChange(item) {
         </div>
 
         {message && (
-        <div
+          <div
             role="status"
             className="mb-5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 transition-colors dark:border-green-800 dark:bg-green-950/50 dark:text-green-300"
-        >
+          >
             {message}
-        </div>
+          </div>
         )}
 
         {error && (
@@ -351,7 +473,10 @@ async function handleStatusChange(item) {
           >
             <p>{error}</p>
             {error.toLowerCase().includes("log in") && (
-              <Link href="/login" className="mt-2 inline-block font-semibold underline">
+              <Link
+                href="/login"
+                className="mt-2 inline-block font-semibold underline"
+              >
                 Go to login →
               </Link>
             )}
@@ -369,7 +494,10 @@ async function handleStatusChange(item) {
             <p className="mt-2 text-slate-600">
               Your submitted reports will appear here.
             </p>
-            <Link href="/report" className="mt-6 inline-flex rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800">
+            <Link
+              href="/report"
+              className="mt-6 inline-flex rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800"
+            >
               Create a report
             </Link>
           </div>
@@ -380,16 +508,26 @@ async function handleStatusChange(item) {
                 <p className="text-sm text-slate-600">
                   {items.length} {items.length === 1 ? "report" : "reports"}
                 </p>
-                <Link href="/report" className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">
+                <Link
+                  href="/report"
+                  className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                >
                   + New report
                 </Link>
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {items.map((item) => (
-                  <article key={item.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <article
+                    key={item.id}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                  >
                     {item.image_url ? (
-                      <img src={item.image_url} alt={item.title} className="h-44 w-full bg-slate-100 object-cover" />
+                      <img
+                        src={item.image_url}
+                        alt={item.title}
+                        className="h-44 w-full bg-slate-100 object-cover"
+                      />
                     ) : (
                       <div className="flex h-32 items-center justify-center bg-slate-100 text-4xl">
                         {item.item_type === "lost" ? "🔎" : "🎒"}
@@ -398,8 +536,16 @@ async function handleStatusChange(item) {
 
                     <div className="p-5">
                       <div className="mb-3 flex flex-wrap gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${item.item_type === "lost" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
-                          {item.item_type === "lost" ? "Lost item" : "Found item"}
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            item.item_type === "lost"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-green-50 text-green-700"
+                          }`}
+                        >
+                          {item.item_type === "lost"
+                            ? "Lost item"
+                            : "Found item"}
                         </span>
                         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                           {item.status || "open"}
@@ -411,50 +557,186 @@ async function handleStatusChange(item) {
                           <h2 className="text-lg font-bold">Edit report</h2>
 
                           <div>
-                            <label htmlFor={`title-${item.id}`} className="mb-1 block text-sm font-medium">Item name</label>
-                            <input id={`title-${item.id}`} name="title" value={form.title} onChange={handleChange} required minLength={3} maxLength={120} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                            <label
+                              htmlFor={`title-${item.id}`}
+                              className="mb-1 block text-sm font-medium"
+                            >
+                              Item name
+                            </label>
+                            <input
+                              id={`title-${item.id}`}
+                              name="title"
+                              value={form.title}
+                              onChange={handleChange}
+                              required
+                              minLength={3}
+                              maxLength={120}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                            />
                           </div>
 
                           <div>
-                            <label htmlFor={`description-${item.id}`} className="mb-1 block text-sm font-medium">Description</label>
-                            <textarea id={`description-${item.id}`} name="description" value={form.description} onChange={handleChange} required minLength={5} maxLength={2000} rows={3} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                            <label
+                              htmlFor={`description-${item.id}`}
+                              className="mb-1 block text-sm font-medium"
+                            >
+                              Description
+                            </label>
+                            <textarea
+                              id={`description-${item.id}`}
+                              name="description"
+                              value={form.description}
+                              onChange={handleChange}
+                              required
+                              minLength={5}
+                              maxLength={2000}
+                              rows={3}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                            />
                           </div>
 
                           <div>
-                            <label htmlFor={`type-${item.id}`} className="mb-1 block text-sm font-medium">Report type</label>
-                            <select id={`type-${item.id}`} name="item_type" value={form.item_type} onChange={handleChange} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                            <label
+                              htmlFor={`type-${item.id}`}
+                              className="mb-1 block text-sm font-medium"
+                            >
+                              Report type
+                            </label>
+                            <select
+                              id={`type-${item.id}`}
+                              name="item_type"
+                              value={form.item_type}
+                              onChange={handleChange}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                            >
                               <option value="lost">Lost item</option>
                               <option value="found">Found item</option>
                             </select>
                           </div>
 
                           <div>
-                            <label htmlFor={`category-${item.id}`} className="mb-1 block text-sm font-medium">Category</label>
-                            <select id={`category-${item.id}`} name="category" value={form.category} onChange={handleChange} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                            <label
+                              htmlFor={`category-${item.id}`}
+                              className="mb-1 block text-sm font-medium"
+                            >
+                              Category
+                            </label>
+                            <select
+                              id={`category-${item.id}`}
+                              name="category"
+                              value={form.category}
+                              onChange={handleChange}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                            >
                               {!categories.includes(form.category) && (
-                                <option value={form.category}>{form.category}</option>
+                                <option value={form.category}>
+                                  {form.category}
+                                </option>
                               )}
                               {categories.map((category) => (
-                                <option key={category} value={category}>{category}</option>
+                                <option key={category} value={category}>
+                                  {category}
+                                </option>
                               ))}
                             </select>
                           </div>
 
                           <div>
-                            <label htmlFor={`location-${item.id}`} className="mb-1 block text-sm font-medium">Campus location</label>
-                            <input id={`location-${item.id}`} name="location" value={form.location} onChange={handleChange} required minLength={2} maxLength={120} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                            <label
+                              htmlFor={`location-${item.id}`}
+                              className="mb-1 block text-sm font-medium"
+                            >
+                              Campus location
+                            </label>
+                            <input
+                              id={`location-${item.id}`}
+                              name="location"
+                              value={form.location}
+                              onChange={handleChange}
+                              required
+                              minLength={2}
+                              maxLength={120}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                            />
                           </div>
 
                           <div>
-                            <label htmlFor={`image-${item.id}`} className="mb-1 block text-sm font-medium">Image URL (optional)</label>
-                            <input id={`image-${item.id}`} name="image_url" type="url" value={form.image_url} onChange={handleChange} placeholder="https://example.com/photo.jpg" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                            <label
+                              htmlFor={`image-${item.id}`}
+                              className="mb-2 block text-sm font-medium"
+                            >
+                              Report image (optional)
+                            </label>
+
+                            {imagePreview ? (
+                              <div className="space-y-3">
+                                <img
+                                  src={imagePreview}
+                                  alt="Selected report preview"
+                                  className="h-44 w-full rounded-xl border border-slate-200 bg-slate-100 object-contain"
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={handleRemoveImage}
+                                  disabled={saving}
+                                  className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                                >
+                                  Remove image
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center">
+                                <p className="text-sm text-slate-600">
+                                  No image selected.
+                                </p>
+                              </div>
+                            )}
+
+                            <label
+                              htmlFor={`image-${item.id}`}
+                              className="mt-3 inline-flex cursor-pointer rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+                            >
+                              {selectedImage
+                                ? "Choose another image"
+                                : imagePreview
+                                  ? "Replace image"
+                                  : "Upload an image"}
+                            </label>
+
+                            <input
+                              id={`image-${item.id}`}
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              onChange={handleImageChange}
+                              disabled={saving}
+                              className="sr-only"
+                            />
+
+                            <p className="mt-2 text-xs leading-5 text-slate-500">
+                              JPEG, PNG or WebP. Maximum file size: 5 MB.
+                              Your changes take effect when you save the report.
+                            </p>
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            <button type="submit" disabled={saving} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60">
-                              {saving ? "Saving..." : "Save changes"}
+                            <button
+                              type="submit"
+                              disabled={saving}
+                              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
+                            >
+                              {uploadingImage
+                                ? "Uploading image..."
+                                : saving
+                                  ? "Saving..."
+                                  : "Save changes"}
                             </button>
-                            <button type="button" onClick={cancelEditing} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50">
+                            <button
+                              type="button"
+                              onClick={cancelEditing}
+                              disabled={saving}
+                              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
+                            >
                               Cancel
                             </button>
                           </div>
@@ -462,48 +744,66 @@ async function handleStatusChange(item) {
                       ) : (
                         <>
                           <h2 className="text-lg font-bold">{item.title}</h2>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.description}</p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                            {item.description}
+                          </p>
 
                           <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-sm text-slate-600">
-                            <p><strong className="text-slate-800">Category:</strong> {item.category}</p>
-                            <p><strong className="text-slate-800">Location:</strong> {item.location}</p>
+                            <p>
+                              <strong className="text-slate-800">
+                                Category:
+                              </strong>{" "}
+                              {item.category}
+                            </p>
+                            <p>
+                              <strong className="text-slate-800">
+                                Location:
+                              </strong>{" "}
+                              {item.location}
+                            </p>
                             {item.created_at && (
-                              <p><strong className="text-slate-800">Reported:</strong> {new Date(item.created_at).toLocaleDateString()}</p>
+                              <p>
+                                <strong className="text-slate-800">
+                                  Reported:
+                                </strong>{" "}
+                                {new Date(item.created_at).toLocaleDateString()}
+                              </p>
                             )}
                           </div>
 
                           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-                            
-                            
                             <button
-                            type="button"
-                            onClick={() => handleStatusChange(item)}
-                            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                              type="button"
+                              onClick={() => handleStatusChange(item)}
+                              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
                                 item.status === "resolved"
-                                ? "bg-amber-50 text-amber-800 hover:bg-amber-100 focus-visible:outline-amber-500 dark:bg-amber-400/15 dark:text-amber-300 dark:hover:bg-amber-400/25 dark:focus-visible:outline-amber-400"
-                                : "bg-green-50 text-green-800 hover:bg-green-100 focus-visible:outline-green-500 dark:bg-emerald-400/15 dark:text-emerald-300 dark:hover:bg-emerald-400/25 dark:focus-visible:outline-emerald-400"
-                            }`}
+                                  ? "bg-amber-50 text-amber-800 hover:bg-amber-100 focus-visible:outline-amber-500 dark:bg-amber-400/15 dark:text-amber-300 dark:hover:bg-amber-400/25 dark:focus-visible:outline-amber-400"
+                                  : "bg-green-50 text-green-800 hover:bg-green-100 focus-visible:outline-green-500 dark:bg-emerald-400/15 dark:text-emerald-300 dark:hover:bg-emerald-400/25 dark:focus-visible:outline-emerald-400"
+                              }`}
                             >
-                            {item.status === "resolved" ? "Reopen" : "Mark resolved"}
+                              {item.status === "resolved"
+                                ? "Reopen"
+                                : "Mark resolved"}
                             </button>
 
                             <button
-                            type="button"
-                            onClick={() => startEditing(item)}
-                            className="rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-blue-400/15 dark:text-blue-300 dark:hover:bg-blue-400/25 dark:focus-visible:outline-blue-400"
+                              type="button"
+                              onClick={() => startEditing(item)}
+                              className="rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-blue-400/15 dark:text-blue-300 dark:hover:bg-blue-400/25 dark:focus-visible:outline-blue-400"
                             >
-                            Edit
+                              Edit
                             </button>
 
                             <button
-                            type="button"
-                            onClick={() => handleDelete(item)}
-                            disabled={deletingId === item.id}
-                            className="rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:bg-red-400/15 dark:text-red-300 dark:hover:bg-red-400/25 dark:focus-visible:outline-red-400"
+                              type="button"
+                              onClick={() => handleDelete(item)}
+                              disabled={deletingId === item.id}
+                              className="rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:bg-red-400/15 dark:text-red-300 dark:hover:bg-red-400/25 dark:focus-visible:outline-red-400"
                             >
-                            {deletingId === item.id ? "Deleting..." : "Delete"}
+                              {deletingId === item.id
+                                ? "Deleting..."
+                                : "Delete"}
                             </button>
-
                           </div>
                         </>
                       )}

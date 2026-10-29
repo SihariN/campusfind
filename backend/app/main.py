@@ -2,7 +2,7 @@
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,6 +13,8 @@ from app.models import Item, User
 from app.schemas import ItemCreate, ItemRead, UserCreate, UserRead, UserLogin, TokenResponse, ItemStatusUpdate
 from sqlalchemy.exc import IntegrityError
 from app.auth import hash_password, verify_password, create_access_token, get_current_user
+
+from app.cloudinary_service import upload_image
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -86,6 +88,58 @@ def list_items(
 
     return db.scalars(statement).all()
 
+
+@app.post("/uploads/image")
+async def upload_item_image(
+    current_user: Annotated[User, Depends(get_current_user)],
+    file: UploadFile = File(...),
+):
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG, and WebP images are allowed.",
+        )
+
+    contents = await file.read(5 * 1024 * 1024 + 1)
+
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail="Image must be 5 MB or smaller.",
+        )
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is empty.",
+        )
+
+    # Check the actual file signature, not just its claimed MIME type.
+    is_jpeg = contents.startswith(b"\xff\xd8\xff")
+    is_png = contents.startswith(b"\x89PNG\r\n\x1a\n")
+    is_webp = (
+        contents.startswith(b"RIFF")
+        and contents[8:12] == b"WEBP"
+    )
+
+    if not (is_jpeg or is_png or is_webp):
+        raise HTTPException(
+            status_code=400,
+            detail="The file is not a valid JPEG, PNG, or WebP image.",
+        )
+
+    try:
+        from io import BytesIO
+
+        image_url = upload_image(BytesIO(contents))
+        return {"image_url": image_url}
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="Image upload failed. Please try again.",
+        )
 
 
 @app.post("/items", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
@@ -199,6 +253,7 @@ def login_user(payload: UserLogin, db: DbSession):
         "token_type": "bearer",
     }
 
+
 @app.put("/items/{item_id}", response_model=ItemRead)
 def update_item(
     item_id: int,
@@ -214,13 +269,20 @@ def update_item(
             detail="Report not found.",
         )
 
-    for field, value in item_data.model_dump().items():
+    update_data = item_data.model_dump()
+
+    # Convert Pydantic HttpUrl to a regular string for PostgreSQL.
+    if update_data.get("image_url") is not None:
+        update_data["image_url"] = str(update_data["image_url"])
+
+    for field, value in update_data.items():
         setattr(item, field, value)
 
     db.commit()
     db.refresh(item)
 
     return item
+
 
 
 @app.delete("/items/{item_id}")
