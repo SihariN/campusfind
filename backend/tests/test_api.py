@@ -5,8 +5,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 
-from app.main import app
 from app.database import Base, get_db
+from app.main import app, limiter
 
 
 # A separate in-memory database used only for testing.
@@ -25,8 +25,10 @@ TestingSessionLocal = sessionmaker(
 )
 
 
+
 @pytest.fixture
 def client():
+    limiter.reset()
     # Create a clean database for each test.
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
@@ -249,3 +251,136 @@ def test_invalid_status_is_rejected(client):
     )
 
     assert response.status_code == 422
+
+
+def test_image_upload_requires_authentication(client):
+    response = client.post(
+        "/uploads/image",
+        files={
+            "file": (
+                "test.png",
+                b"\x89PNG\r\n\x1a\nfake-image-content",
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 401
+
+
+
+def test_image_upload_rejects_oversized_file(client):
+    register_user(client, "large-image-test@example.com")
+    token = login_user(client, "large-image-test@example.com").json()["access_token"]
+
+    oversized_content = b"\x89PNG\r\n\x1a\n" + b"x" * (5 * 1024 * 1024)
+
+    response = client.post(
+        "/uploads/image",
+        headers={"Authorization": f"Bearer {token}"},
+        files={
+            "file": (
+                "large.png",
+                oversized_content,
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 413
+
+
+
+def test_image_upload_rejects_fake_png(client):
+    register_user(client, "fake-image-test@example.com")
+    token = login_user(client, "fake-image-test@example.com").json()["access_token"]
+
+    response = client.post(
+        "/uploads/image",
+        headers={"Authorization": f"Bearer {token}"},
+        files={
+            "file": (
+                "not-really-a-png.png",
+                b"This is a text file, not an image.",
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+
+
+
+def test_image_upload_rejects_unsupported_format(client):
+    register_user(client, "unsupported-image-test@example.com")
+    token = login_user(
+        client, "unsupported-image-test@example.com"
+    ).json()["access_token"]
+
+    response = client.post(
+        "/uploads/image",
+        headers={"Authorization": f"Bearer {token}"},
+        files={
+            "file": (
+                "animation.gif",
+                b"GIF89a fake image content",
+                "image/gif",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_image_upload_rejects_empty_file(client):
+    register_user(client, "empty-image-test@example.com")
+    token = login_user(
+        client, "empty-image-test@example.com"
+    ).json()["access_token"]
+
+    response = client.post(
+        "/uploads/image",
+        headers={"Authorization": f"Bearer {token}"},
+        files={
+            "file": (
+                "empty.png",
+                b"",
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_image_upload_rejects_invalid_token(client):
+    response = client.post(
+        "/uploads/image",
+        headers={"Authorization": "Bearer invalid-token"},
+        files={
+            "file": (
+                "test.png",
+                b"\x89PNG\r\n\x1a\nfake-image-content",
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_create_report_rejects_invalid_token(client):
+    response = client.post(
+        "/items",
+        headers={"Authorization": "Bearer invalid-token"},
+        json={
+            "title": "Lost student wallet",
+            "description": "A black wallet was lost near the library.",
+            "category": "Accessories",
+            "location": "University library",
+            "item_type": "lost",
+            "image_url": None,
+        },
+    )
+
+    assert response.status_code == 401

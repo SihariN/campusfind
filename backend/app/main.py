@@ -2,7 +2,7 @@
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status, File, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Query, status, File, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,6 +16,10 @@ from app.auth import hash_password, verify_password, create_access_token, get_cu
 
 from app.cloudinary_service import upload_image
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
@@ -27,6 +31,14 @@ app = FastAPI(
     description="API for the CampusFind lost-and-found platform",
     version="0.2.0",
     lifespan=lifespan,
+)
+
+limiter = Limiter(key_func=get_remote_address)
+
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,
 )
 
 app.add_middleware(
@@ -193,7 +205,12 @@ def get_item(item_id: int, db: DbSession):
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
 )
-def register_user(payload: UserCreate, db: DbSession):
+@limiter.limit("5/hour")
+def register_user(
+    request: Request,
+    payload: UserCreate,
+    db: DbSession,
+):
     email = str(payload.email).strip().lower()
 
     existing_user = db.scalar(
@@ -228,7 +245,13 @@ def register_user(payload: UserCreate, db: DbSession):
 
 
 @app.post("/auth/login", response_model=TokenResponse)
-def login_user(payload: UserLogin, db: DbSession):
+@limiter.limit("5/minute")
+def login_user(
+    request: Request,
+    payload: UserLogin,
+    db: DbSession,
+):
+    # Keep your existing function body here.
     email = str(payload.email).strip().lower()
 
     user = db.scalar(
