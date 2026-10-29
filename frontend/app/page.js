@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getItems } from "../lib/api";
+import { getItems, getInbox } from "../lib/api";
 
 const categories = [
   "Electronics",
@@ -27,6 +27,7 @@ export default function Home() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Load saved login and theme preferences.
   useEffect(() => {
@@ -47,7 +48,39 @@ export default function Home() {
       currentTheme === "dark" ? "light" : "dark"
     );
   }
+  useEffect(() => {
+  if (!isLoggedIn) {
+    setUnreadCount(0);
+    return;
+  }
 
+  let cancelled = false;
+
+  const loadUnreadCount = async () => {
+    try {
+      const messages = await getInbox();
+
+      if (!cancelled) {
+        setUnreadCount(
+          messages.filter((message) => !message.is_read).length
+        );
+      }
+    } catch (error) {
+      if (!cancelled) {
+        setUnreadCount(0);
+      }
+    }
+  };
+
+  loadUnreadCount();
+
+  window.addEventListener("focus", loadUnreadCount);
+
+  return () => {
+    cancelled = true;
+    window.removeEventListener("focus", loadUnreadCount);
+  };
+}, [isLoggedIn]);
   // Load and filter listings.
   useEffect(() => {
     let cancelled = false;
@@ -95,7 +128,7 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
       {/* Navigation */}
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
           <Link href="/" className="flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-700 text-2xl font-bold text-white shadow-sm">
               C
@@ -112,7 +145,7 @@ export default function Home() {
 
           <nav
             aria-label="Main navigation"
-            className="flex flex-wrap items-center gap-2"
+            className="flex w-full flex-wrap items-center gap-2 sm:gap-3 lg:w-auto"
           >
             <button
               type="button"
@@ -132,6 +165,7 @@ export default function Home() {
               {theme === "dark" ? "☀️" : "🌙"}
             </button>
 
+            
             {isLoggedIn ? (
               <>
                 <Link
@@ -140,6 +174,20 @@ export default function Home() {
                 >
                   My Reports
                 </Link>
+
+                
+                <Link
+                  href="/messages/inbox"
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
+                >
+                  ✉️ Messages
+                  {unreadCount > 0 && (
+                    <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+                      {unreadCount}
+                    </span>
+                  )}
+                </Link>
+
 
                 <button
                   type="button"
@@ -157,7 +205,7 @@ export default function Home() {
               <>
                 <Link
                   href="/login"
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 border border-gray-300 dark:border-gray-600"
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-gray-600 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Log in
                 </Link>
@@ -171,9 +219,10 @@ export default function Home() {
               </>
             )}
 
+
             <Link
               href="/report"
-              className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+              className="inline-flex items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
             >
               + Report item
             </Link>
@@ -182,7 +231,7 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-900 text-white">
+      <section className="relative isolate overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-900 text-white">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl"
@@ -199,7 +248,7 @@ export default function Home() {
               Your campus community, connected
             </div>
 
-            <h1 className="max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
+            <h1 className="max-w-3xl text-5xl font-black leading-[1.08] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
               Lost something?
               <br />
               <span className="text-blue-300">Let&apos;s find it.</span>
@@ -297,7 +346,7 @@ export default function Home() {
         </div>
 
         {/* Search and filters */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors duration-300 sm:p-6 dark:border-slate-700 dark:bg-slate-900">
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-lg shadow-slate-200/40 transition-colors duration-300 sm:p-7 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/10">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr]">
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -459,17 +508,18 @@ export default function Home() {
         {!loading && !error && items.length > 0 && (
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
-              <article
-                key={item.id}
-                className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-slate-200/60 dark:border-slate-700 dark:bg-slate-900 dark:hover:shadow-black/20"
-              >
-                <div className="relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 to-blue-100 dark:from-slate-800 dark:to-slate-700">
+              <Link
+              key={item.id}
+              href={`/items/${item.id}`}
+              className="group block overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-950/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-800 dark:hover:shadow-black/30"
+            >
+                <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 dark:from-slate-800 dark:via-slate-800 dark:to-indigo-950">
                   {item.image_url ? (
                     <img
                       src={item.image_url}
                       alt={item.title}
                       loading="lazy"
-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                     />
                   ) : (
                     <span className="text-6xl" aria-hidden="true">
@@ -478,7 +528,7 @@ export default function Home() {
                   )}
 
                   <span
-                    className={`absolute left-3 top-3 rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide shadow-sm ${
+                    className={`absolute left-3 top-3 rounded-full border border-white/50 px-3.5 py-1.5 text-xs font-extrabold uppercase tracking-wider shadow-md backdrop-blur-sm ${
                       item.item_type === "lost"
                         ? "bg-rose-100 text-rose-800"
                         : "bg-emerald-100 text-emerald-800"
@@ -490,20 +540,20 @@ export default function Home() {
 
                 <div className="p-5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-bold tracking-wide text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
                       {item.category}
                     </span>
                   </div>
 
-                  <h4 className="mt-3 break-words text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+                  <h4 className="mt-4 break-words text-xl font-bold leading-snug tracking-tight text-slate-900 dark:text-white">
                     {item.title}
                   </h4>
 
-                  <p className="mt-2 min-h-[4.5rem] break-words text-sm leading-6 text-slate-600 dark:text-slate-300 [overflow-wrap:anywhere]">
+                  <p className="mt-3 min-h-[4.5rem] break-words text-sm leading-7 text-slate-600 dark:text-slate-300 [overflow-wrap:anywhere]">
                     {item.description}
                   </p>
 
-                  <div className="mt-4 flex items-start gap-2 border-t border-slate-100 pt-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                  <div className="mt-5 flex items-start gap-3 border-t border-slate-100 pt-4 text-sm leading-6 text-slate-600 dark:border-slate-700 dark:text-slate-300">
                     <span aria-hidden="true">📍</span>
                     <span className="break-words [overflow-wrap:anywhere]">
                       {item.location}
@@ -524,7 +574,7 @@ export default function Home() {
                     </p>
                   )}
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
         )}

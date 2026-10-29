@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.database import Base, engine, get_db
 from app import models
-from app.models import Item, User
-from app.schemas import ItemCreate, ItemRead, UserCreate, UserRead, UserLogin, TokenResponse, ItemStatusUpdate
+from app.models import Item, User,Message
+from app.schemas import ItemCreate, ItemRead, UserCreate, UserRead, UserLogin, TokenResponse, ItemStatusUpdate, MessageCreate, MessageRead
 from sqlalchemy.exc import IntegrityError
 from app.auth import hash_password, verify_password, create_access_token, get_current_user
 
@@ -51,6 +51,21 @@ app.add_middleware(
 
 DbSession = Annotated[Session, Depends(get_db)]
 
+def message_response(db, message):
+    sender = db.get(User, message.sender_id)
+    recipient = db.get(User, message.recipient_id)
+
+    return {
+        "id": message.id,
+        "item_id": message.item_id,
+        "sender_id": message.sender_id,
+        "recipient_id": message.recipient_id,
+        "sender_email": sender.email if sender else None,
+        "recipient_email": recipient.email if recipient else None,
+        "content": message.content,
+        "is_read": message.is_read,
+        "created_at": message.created_at,
+    }
 
 @app.get("/")
 def root():
@@ -199,6 +214,104 @@ def get_item(item_id: int, db: DbSession):
         )
 
     return item
+
+
+@app.post(
+    "/items/{item_id}/messages",
+    response_model=MessageRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def send_message(
+    item_id: int,
+    payload: MessageCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(
+            status_code=422,
+            detail="Message cannot be empty.",
+        )
+
+    item = db.get(Item, item_id)
+    if item is None or item.status != "open":
+        raise HTTPException(
+            status_code=404,
+            detail="Open listing not found.",
+        )
+
+    if item.user_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="This listing has no associated reporter.",
+        )
+
+    if item.user_id == current_user.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot message yourself.",
+        )
+
+    message = Message(
+        item_id=item.id,
+        sender_id=current_user.id,
+        recipient_id=item.user_id,
+        content=content,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return message_response(db, message)
+
+
+@app.get("/messages/inbox", response_model=list[MessageRead])
+def get_inbox(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    statement = (
+        select(Message)
+        .where(Message.recipient_id == current_user.id)
+        .order_by(Message.created_at.desc())
+    )
+    messages = db.scalars(statement).all()
+    return [message_response(db, message) for message in messages]
+
+
+@app.get("/messages/sent", response_model=list[MessageRead])
+def get_sent_messages(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    statement = (
+        select(Message)
+        .where(Message.sender_id == current_user.id)
+        .order_by(Message.created_at.desc())
+    )
+    messages = db.scalars(statement).all()
+    return [message_response(db, message) for message in messages]
+
+
+@app.patch("/messages/{message_id}/read", response_model=MessageRead)
+def mark_message_read(
+    message_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    message = db.get(Message, message_id)
+
+    if message is None or message.recipient_id != current_user.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Message not found.",
+        )
+
+    message.is_read = True
+    db.commit()
+    db.refresh(message)
+    return message_response(db, message)
+
 
 @app.post(
     "/auth/register",

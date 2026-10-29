@@ -54,6 +54,50 @@ class Item(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True
+    )
+
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("items.id"),
+        nullable=False,
+        index=True,
+    )
+
+    sender_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    recipient_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    is_read: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
 class User(Base):
     __tablename__ = "users"
 

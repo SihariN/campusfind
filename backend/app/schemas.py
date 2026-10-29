@@ -49,3 +49,22 @@ class TokenResponse(BaseModel):
     
 class ItemStatusUpdate(BaseModel):
     status: Literal["open", "resolved"]
+
+
+class MessageCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+
+class MessageRead(BaseModel):
+    id: int
+    item_id: int
+    sender_id: int
+    recipient_id: int
+    sender_email: str | None = None
+    recipient_email: str | None = None
+    content: str
+    is_read: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
