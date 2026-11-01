@@ -167,15 +167,15 @@ useEffect(() => {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
       {/* Navigation */}
-      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 shadow-sm shadow-slate-900/[0.03] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-700 text-2xl font-bold text-white shadow-sm">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-blue-700 to-indigo-800 text-2xl font-black text-white shadow-lg shadow-blue-700/25 ring-1 ring-white/20">
               C
             </span>
             <span>
-              <span className="block text-xl font-extrabold tracking-tight">
-                CampusFind
+              <span className="block text-xl font-black tracking-tight text-slate-950 dark:text-white">
+                CampusFind<span className="text-blue-600 dark:text-blue-400">.</span>
               </span>
               <span className="block text-xs text-slate-500 dark:text-slate-400">
                 Lost something? Find it here.
@@ -210,14 +210,14 @@ useEffect(() => {
               <>
                 <Link
                   href="/my-reports"
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-700/20 transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-800 hover:to-indigo-800 hover:shadow-lg hover:shadow-blue-700/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 dark:from-blue-600 dark:to-indigo-600 dark:hover:from-blue-500 dark:hover:to-indigo-500"
                 >
                   My Reports
                 </Link>
 
                 <Link
                   href="/notifications"
-                  className="rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-700 transition hover:bg-purple-100 dark:border-purple-900 dark:bg-purple-950 dark:text-purple-300 dark:hover:bg-purple-900"
+                  className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-800 dark:hover:bg-slate-800"
                 >
                   🔔 Notifications
 
@@ -231,7 +231,7 @@ useEffect(() => {
                 
                 <Link
                   href="/messages/inbox"
-                  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
+                  className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-800 dark:hover:bg-slate-800"
                 >
                   ✉️ Messages
                   {unreadCount > 0 && (
@@ -243,7 +243,7 @@ useEffect(() => {
 
                 <Link
                   href="/profile"
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                  className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-800 dark:hover:bg-slate-800"
                 >
                   👤 Profile
                 </Link>
@@ -256,7 +256,7 @@ useEffect(() => {
                     setIsLoggedIn(false);
                     router.refresh();
                   }}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="rounded-xl border border-slate-200/80 px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition-all duration-200 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-rose-900 dark:hover:bg-rose-950 dark:hover:text-rose-300"
                 >
                   Log out
                 </button>
@@ -308,29 +308,29 @@ useEffect(() => {
               Your campus community, connected
             </div>
 
-            <h1 className="max-w-3xl text-5xl font-black leading-[1.08] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-3xl text-5xl font-black leading-[1.05] tracking-[-0.045em] sm:text-6xl lg:text-7xl xl:text-[5.25rem]">
               Lost something?
               <br />
               <span className="text-blue-300">Let&apos;s find it.</span>
             </h1>
 
-            <p className="mt-6 max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
-              A shared space for students to report lost belongings,
-              share found items, and help important things find their
-              way home.
+            <p className="mt-6 max-w-xl text-base leading-8 text-blue-100/85 sm:text-lg">
+              Lost belongings shouldn't stay lost. Discover reported items,
+              connect with your campus community, and help belongings find
+              their way back to the people who need them.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <a
                 href="#listings"
-                className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-md transition hover:bg-blue-700 dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400"
+                className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3.5 font-bold text-blue-900 shadow-lg shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
                 Explore listings ↓
               </a>
 
               <Link
                 href="/report"
-                className="rounded-xl border border-white/25 bg-white/5 px-6 py-3.5 font-bold text-white transition hover:bg-white/10"
+                className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-6 py-3.5 font-bold text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-white/40 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
                 Report an item
               </Link>
@@ -388,14 +388,14 @@ useEffect(() => {
       {/* Listings */}
       <section
         id="listings"
-        className="mx-auto max-w-7xl px-5 py-12 transition-colors duration-300 sm:px-8 sm:py-16"
+        className="mx-auto max-w-7xl px-5 py-14 transition-colors duration-300 sm:px-8 sm:py-20"
       >
         <div className="mb-8">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-400">
             The community board
           </p>
 
-          <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
+          <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl dark:text-white">
             Find what you&apos;re looking for
           </h2>
 
@@ -406,7 +406,7 @@ useEffect(() => {
         </div>
 
         {/* Search and filters */}
-        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-lg shadow-slate-200/40 transition-colors duration-300 sm:p-7 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/10">
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xl shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors duration-300 sm:p-7 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/20 dark:ring-white/[0.03]">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr]">
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -417,7 +417,7 @@ useEffect(() => {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Try “blue water bottle”"
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-800"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3.5 text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600 dark:focus:border-blue-500 dark:focus:bg-slate-800"
               />
             </label>
 
@@ -428,7 +428,7 @@ useEffect(() => {
               <select
                 value={itemType}
                 onChange={(event) => setItemType(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-800"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3.5 text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600 dark:focus:border-blue-500 dark:focus:bg-slate-800"
               >
                 <option value="">All items</option>
                 <option value="lost">Lost items</option>
@@ -443,7 +443,7 @@ useEffect(() => {
               <select
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-800"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3.5 text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600 dark:focus:border-blue-500 dark:focus:bg-slate-800"
               >
                 <option value="">All categories</option>
                 {categories.map((name) => (
@@ -571,9 +571,9 @@ useEffect(() => {
               <Link
               key={item.id}
               href={`/items/${item.id}`}
-              className="group block overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-950/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-800 dark:hover:shadow-black/30"
+              className="group block overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.03] transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-950/[0.08] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700 dark:hover:shadow-black/30"
             >
-                <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 dark:from-slate-800 dark:via-slate-800 dark:to-indigo-950">
+                <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-100 dark:from-slate-800 dark:via-slate-800 dark:to-indigo-950">
                   {item.image_url ? (
                     <img
                       src={item.image_url}
