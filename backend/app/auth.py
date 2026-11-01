@@ -1,13 +1,11 @@
 
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Annotated
 
 import jwt
 from dotenv import load_dotenv
 from pwdlib import PasswordHash
-
-
-from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -55,7 +53,12 @@ def create_access_token(user_id: int) -> str:
         "exp": expires_at,
     }
 
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return jwt.encode(
+        payload,
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM,
+    )
+
 
 security = HTTPBearer(auto_error=False)
 
@@ -67,6 +70,7 @@ def get_current_user(
     ],
     db: Annotated[Session, Depends(get_db)],
 ) -> User:
+
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,8 +84,15 @@ def get_current_user(
             JWT_SECRET_KEY,
             algorithms=[JWT_ALGORITHM],
         )
+
         user_id = int(payload["sub"])
-    except (jwt.InvalidTokenError, KeyError, TypeError, ValueError):
+
+    except (
+        jwt.InvalidTokenError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
@@ -98,3 +109,19 @@ def get_current_user(
         )
 
     return user
+
+
+def get_current_admin(
+    current_user: Annotated[
+        User,
+        Depends(get_current_user),
+    ],
+) -> User:
+
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required.",
+        )
+
+    return current_user

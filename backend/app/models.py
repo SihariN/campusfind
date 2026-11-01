@@ -104,6 +104,13 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="user",
+        server_default="user",
+    )
+
     email: Mapped[str] = mapped_column(
         String(255),
         unique=True,

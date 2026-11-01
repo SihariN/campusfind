@@ -15,7 +15,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -25,7 +25,7 @@ from slowapi.util import get_remote_address
 
 from app.database import Base, engine, get_db
 from app import models
-from app.models import Item, User, Message
+from app.models import Item, User, Message, StatusHistory
 from app.schemas import (
     ItemCreate,
     ItemRead,
@@ -47,10 +47,11 @@ from app.auth import (
     verify_password,
     create_access_token,
     get_current_user,
+    get_current_admin
 )
 from app.cloudinary_service import upload_image, upload_profile_picture
 from app.matching import calculate_match
-
+from datetime import datetime, timedelta, timezone
 
 # ---------------------------------------------------------
 # APPLICATION SETUP
@@ -122,6 +123,268 @@ def root():
 def health_check():
     return {"status": "healthy"}
 
+
+# ---------------------------------------------------------
+# ADMIN DASHBOARD
+# ---------------------------------------------------------
+
+@app.get("/admin/dashboard/stats")
+def get_admin_dashboard_stats(
+    db: DbSession,
+    current_admin: Annotated[
+        User,
+        Depends(get_current_admin),
+    ],
+):
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+
+    total_users = db.scalar(
+        select(func.count(User.id))
+    ) or 0
+
+    total_lost_reports = db.scalar(
+        select(func.count(Item.id)).where(
+            Item.item_type == "lost"
+        )
+    ) or 0
+
+    total_found_reports = db.scalar(
+        select(func.count(Item.id)).where(
+            Item.item_type == "found"
+        )
+    ) or 0
+
+    open_reports = db.scalar(
+        select(func.count(Item.id)).where(
+            Item.status == "open"
+        )
+    ) or 0
+
+    recovery_pending_reports = db.scalar(
+        select(func.count(Item.id)).where(
+            Item.status == "recovery_pending"
+        )
+    ) or 0
+
+    resolved_reports = db.scalar(
+        select(func.count(Item.id)).where(
+            Item.status == "resolved"
+        )
+    ) or 0
+
+    recent_reports = db.scalar(
+        select(func.count(Item.id)).where(
+            Item.created_at >= seven_days_ago
+        )
+    ) or 0
+
+    recent_users = db.scalar(
+        select(func.count(User.id)).where(
+            User.created_at >= seven_days_ago
+        )
+    ) or 0
+
+    return {
+        "total_users": total_users,
+        "total_lost_reports": total_lost_reports,
+        "total_found_reports": total_found_reports,
+        "open_reports": open_reports,
+        "recovery_pending_reports": recovery_pending_reports,
+        "resolved_reports": resolved_reports,
+        "recent_reports": recent_reports,
+        "recent_users": recent_users,
+    }
+
+
+
+# ---------------------------------------------------------
+# ADMIN LISTING MANAGEMENT
+# ---------------------------------------------------------
+
+@app.get("/admin/listings")
+def get_admin_listings(
+    db: DbSession,
+    current_admin: Annotated[
+        User,
+        Depends(get_current_admin),
+    ],
+    item_type: str | None = Query(
+        default=None,
+        pattern="^(lost|found)$",
+    ),
+    item_status: str | None = Query(
+        default=None,
+        alias="status",
+        pattern="^(open|recovery_pending|resolved)$",
+    ),
+    search: str | None = Query(
+        default=None,
+        max_length=100,
+    ),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
+):
+    statement = select(Item)
+
+    if item_type:
+        statement = statement.where(
+            Item.item_type == item_type
+        )
+
+    if item_status:
+        statement = statement.where(
+            Item.status == item_status
+        )
+
+    if search:
+        pattern = f"%{search}%"
+
+        statement = statement.where(
+            Item.title.ilike(pattern)
+            | Item.description.ilike(pattern)
+            | Item.location.ilike(pattern)
+        )
+
+    total = db.scalar(
+        select(func.count()).select_from(
+            statement.subquery()
+        )
+    ) or 0
+
+    statement = (
+        statement
+        .order_by(Item.created_at.desc(), Item.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+
+    items = db.scalars(statement).all()
+
+    results = []
+
+    for item in items:
+        owner = db.get(User, item.user_id) if item.user_id else None
+
+        results.append({
+            "id": item.id,
+            "title": item.title,
+            "description": item.description,
+            "category": item.category,
+            "item_type": item.item_type,
+            "status": item.status,
+            "location": item.location,
+            "image_url": item.image_url,
+            "created_at": item.created_at,
+            "user_id": item.user_id,
+            "owner_email": owner.email if owner else None,
+            "owner_name": owner.full_name if owner else None,
+        })
+
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "listings": results,
+    }
+
+# ---------------------------------------------------------
+# ADMIN RECENT ACTIVITY
+# ---------------------------------------------------------
+
+@app.get("/admin/dashboard/activity")
+def get_admin_recent_activity(
+    db: DbSession,
+    current_admin: Annotated[
+        User,
+        Depends(get_current_admin),
+    ],
+    limit: int = Query(default=15, ge=1, le=50),
+):
+    activities = []
+
+    # Recent user registrations
+    recent_users = db.scalars(
+        select(User)
+        .order_by(User.created_at.desc())
+        .limit(limit)
+    ).all()
+
+    for user in recent_users:
+        activities.append({
+            "type": "user_registered",
+            "title": "New user registered",
+            "description": (
+                f"{user.full_name or user.email} joined CampusFind."
+            ),
+            "created_at": user.created_at,
+            "user_id": user.id,
+        })
+
+    # Recent lost and found reports
+    recent_items = db.scalars(
+        select(Item)
+        .order_by(Item.created_at.desc())
+        .limit(limit)
+    ).all()
+
+    for item in recent_items:
+        activities.append({
+            "type": "listing_created",
+            "title": "New listing created",
+            "description": (
+                f'"{item.title}" was reported as a '
+                f'{item.item_type} item.'
+            ),
+            "created_at": item.created_at,
+            "item_id": item.id,
+        })
+
+    # Recent status changes
+    recent_changes = db.scalars(
+        select(StatusHistory)
+        .order_by(StatusHistory.created_at.desc())
+        .limit(limit)
+    ).all()
+
+    for change in recent_changes:
+        activities.append({
+            "type": "status_changed",
+            "title": "Listing status updated",
+            "description": (
+                f"Listing #{change.item_id} changed from "
+                f"{change.old_status} to {change.new_status}."
+            ),
+            "created_at": change.created_at,
+            "item_id": change.item_id,
+            "user_id": change.changed_by,
+            "note": change.note,
+        })
+
+    # Combine and sort all activity types
+    activities.sort(
+        key=lambda activity: activity["created_at"],
+        reverse=True,
+    )
+
+    return {
+        "total": len(activities),
+        "activities": activities[:limit],
+    }
+
+
+@app.get("/admin/me")
+def get_admin_profile(
+    current_admin: Annotated[
+        User,
+        Depends(get_current_admin),
+    ],
+):
+    return {
+        "message": "Admin access verified.",
+        "id": current_admin.id,
+        "email": current_admin.email,
+        "role": current_admin.role,
+    }
 
 @app.get("/db-check")
 def database_check():
