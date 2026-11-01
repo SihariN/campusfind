@@ -18,6 +18,7 @@ class ItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    user_id: int | None = None
     title: str
     description: str
     category: str
@@ -26,6 +27,7 @@ class ItemRead(BaseModel):
     item_type: str
     image_url: str | None
     created_at: datetime
+    
 class UserCreate(BaseModel):
     email: EmailStr
     password: SecretStr = Field(min_length=8, max_length=128)

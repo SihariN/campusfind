@@ -2,6 +2,27 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
+function getAuthHeaders() {
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("campusfind_token")
+      : null;
+
+  return token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+}
+
+async function handleResponse(response, fallbackMessage) {
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.detail || fallbackMessage);
+  }
+
+  return data;
+}
+
 export async function getItems(params = {}) {
   const searchParams = new URLSearchParams();
 
@@ -18,11 +39,7 @@ export async function getItems(params = {}) {
     cache: "no-store",
   });
 
-  if (!response.ok) {
-    throw new Error("Could not load listings. Please try again.");
-  }
-
-  return response.json();
+  return handleResponse(response, "Could not load listings. Please try again.");
 }
 
 export async function getItemById(id) {
@@ -34,65 +51,29 @@ export async function getItemById(id) {
     throw new Error("Listing not found.");
   }
 
-  if (!response.ok) {
-    throw new Error("Could not load this listing. Please try again.");
-  }
-
-  return response.json();
+  return handleResponse(response, "Could not load this listing. Please try again.");
 }
 
 export async function getItemMatches(itemId) {
-  const response = await fetch(
-    `${API_BASE}/items/${itemId}/matches`,
-    {
-      headers: getAuthHeaders(),
-      cache: "no-store",
-    }
-  );
+  const response = await fetch(`${API_BASE}/items/${itemId}/matches`, {
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      data.detail || "Could not load possible matches."
-    );
-  }
-
-  return data;
-}
-
-
-function getAuthHeaders() {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("campusfind_token")
-      : null;
-
-  return token
-    ? { Authorization: `Bearer ${token}` }
-    : {};
+  return handleResponse(response, "Could not load possible matches.");
 }
 
 export async function sendMessage(itemId, content) {
-  const response = await fetch(
-    `${API_BASE}/items/${itemId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ content }),
-    }
-  );
+  const response = await fetch(`${API_BASE}/items/${itemId}/messages`, {
+    method: "POST",
+    headers: {
+      ...getAuthHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ content }),
+  });
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.detail || "Could not send message.");
-  }
-
-  return data;
+  return handleResponse(response, "Could not send your message.");
 }
 
 export async function getInbox() {
@@ -101,13 +82,7 @@ export async function getInbox() {
     cache: "no-store",
   });
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.detail || "Could not load your inbox.");
-  }
-
-  return data;
+  return handleResponse(response, "Could not load your inbox.");
 }
 
 export async function getSentMessages() {
@@ -116,13 +91,7 @@ export async function getSentMessages() {
     cache: "no-store",
   });
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.detail || "Could not load sent messages.");
-  }
-
-  return data;
+  return handleResponse(response, "Could not load sent messages.");
 }
 
 export async function markMessageRead(messageId) {
@@ -134,11 +103,63 @@ export async function markMessageRead(messageId) {
     }
   );
 
-  const data = await response.json().catch(() => ({}));
+  return handleResponse(response, "Could not mark message as read.");
+}
 
-  if (!response.ok) {
-    throw new Error(data.detail || "Could not mark message as read.");
+// Get status history.
+export async function getItemStatusHistory(itemId) {
+  const response = await fetch(
+    `${API_BASE}/items/${itemId}/status-history`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  return handleResponse(response, "Could not load status history.");
+}
+
+// Update report status.
+export async function updateItemStatus(itemId, status, note = "") {
+  const response = await fetch(
+    `${API_BASE}/items/${itemId}/status`,
+    {
+      method: "PATCH",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        status,
+        note: note.trim() || null,
+      }),
+    }
+  );
+
+  return handleResponse(response, "Could not update report status.");
+}
+
+// Get the logged-in user's ID from the JWT.
+export function getLoggedInUserId() {
+  if (typeof window === "undefined") {
+    return null;
   }
 
-  return data;
+  const token = localStorage.getItem("campusfind_token");
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const payload = token.split(".")[1];
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(
+      atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="))
+    );
+
+    return decoded.sub ? String(decoded.sub) : null;
+  } catch {
+    return null;
+  }
 }

@@ -743,7 +743,12 @@ export default function MyReportsPage() {
                         </form>
                       ) : (
                         <>
-                          <h2 className="text-lg font-bold">{item.title}</h2>
+                          <Link
+                            href={`/items/${item.id}`}
+                            className="text-lg font-bold text-blue-700 hover:underline dark:text-blue-400"
+                          >
+                            {item.title} →
+                          </Link>
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
                             {item.description}
                           </p>

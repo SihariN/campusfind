@@ -1177,3 +1177,315 @@ def test_matching_endpoint_excludes_own_found_reports(client):
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+# ---------------------------------------------------------
+# RECOVERY WORKFLOW, STATUS HISTORY & NOTIFICATION TESTS
+# ---------------------------------------------------------
+
+
+def test_owner_can_move_report_to_recovery_pending(client):
+    owner_token = get_token(client, "recovery-owner@example.com")
+    report = create_report(client, owner_token).json()
+
+    response = client.patch(
+        f"/items/{report['id']}/status",
+        headers=auth_headers(owner_token),
+        json={
+            "status": "recovery_pending",
+            "note": "Arranging to collect the item.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "recovery_pending"
+
+
+def test_recovery_pending_report_can_be_resolved(client):
+    token = get_token(client, "recovery-resolve@example.com")
+    report = create_report(client, token).json()
+    headers = auth_headers(token)
+
+    pending = client.patch(
+        f"/items/{report['id']}/status",
+        headers=headers,
+        json={"status": "recovery_pending"},
+    )
+    assert pending.status_code == 200
+
+    resolved = client.patch(
+        f"/items/{report['id']}/status",
+        headers=headers,
+        json={"status": "resolved"},
+    )
+
+    assert resolved.status_code == 200
+    assert resolved.json()["status"] == "resolved"
+
+
+def test_recovery_pending_report_can_be_reopened(client):
+    token = get_token(client, "recovery-reopen@example.com")
+    report = create_report(client, token).json()
+    headers = auth_headers(token)
+
+    client.patch(
+        f"/items/{report['id']}/status",
+        headers=headers,
+        json={"status": "recovery_pending"},
+    )
+
+    response = client.patch(
+        f"/items/{report['id']}/status",
+        headers=headers,
+        json={
+            "status": "open",
+            "note": "The handover could not be completed.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "open"
+
+
+def test_status_change_creates_history_record(client):
+    token = get_token(client, "history-owner@example.com")
+    report = create_report(client, token).json()
+    headers = auth_headers(token)
+
+    response = client.patch(
+        f"/items/{report['id']}/status",
+        headers=headers,
+        json={
+            "status": "recovery_pending",
+            "note": "Contacted the finder.",
+        },
+    )
+    assert response.status_code == 200
+
+    history_response = client.get(
+        f"/items/{report['id']}/status-history",
+        headers=headers,
+    )
+
+    assert history_response.status_code == 200
+
+    history = history_response.json()
+    assert len(history) == 1
+    assert history[0]["item_id"] == report["id"]
+    assert history[0]["changed_by"] is not None
+    assert history[0]["old_status"] == "open"
+    assert history[0]["new_status"] == "recovery_pending"
+    assert history[0]["note"] == "Contacted the finder."
+    assert history[0]["created_at"] is not None
+
+
+def test_same_status_does_not_create_history(client):
+    token = get_token(client, "history-noop@example.com")
+    report = create_report(client, token).json()
+    headers = auth_headers(token)
+
+    response = client.patch(
+        f"/items/{report['id']}/status",
+        headers=headers,
+        json={"status": "open"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "open"
+
+    history = client.get(
+        f"/items/{report['id']}/status-history",
+        headers=headers,
+    )
+
+    assert history.status_code == 200
+    assert history.json() == []
+
+
+def test_only_owner_can_view_status_history(client):
+    owner_token = get_token(client, "history-private-owner@example.com")
+    other_token = get_token(client, "history-private-other@example.com")
+
+    report = create_report(client, owner_token).json()
+
+    response = client.get(
+        f"/items/{report['id']}/status-history",
+        headers=auth_headers(other_token),
+    )
+
+    assert response.status_code == 403
+
+
+def test_status_history_requires_authentication(client):
+    token = get_token(client, "history-auth@example.com")
+    report = create_report(client, token).json()
+
+    response = client.get(
+        f"/items/{report['id']}/status-history"
+    )
+
+    assert response.status_code == 401
+
+
+def test_status_change_notifies_message_sender(client):
+    owner_token = get_token(client, "notification-owner@example.com")
+    sender_token = get_token(client, "notification-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+
+    message = create_message(
+        client,
+        sender_token,
+        report["id"],
+    )
+    assert message.status_code == 201
+
+    update = client.patch(
+        f"/items/{report['id']}/status",
+        headers=auth_headers(owner_token),
+        json={"status": "recovery_pending"},
+    )
+
+    assert update.status_code == 200
+
+    notifications = client.get(
+        "/notifications",
+        headers=auth_headers(sender_token),
+    )
+
+    assert notifications.status_code == 200
+    assert len(notifications.json()) == 1
+
+    notification = notifications.json()[0]
+
+    assert notification["user_id"] is not None
+    assert notification["item_id"] == report["id"]
+    assert notification["title"] == "Report status updated"
+    assert "recovery pending" in notification["message"]
+    assert notification["is_read"] is False
+
+
+def test_status_change_does_not_notify_report_owner(client):
+    owner_token = get_token(client, "notification-owner-only@example.com")
+    sender_token = get_token(client, "notification-sender-only@example.com")
+
+    report = create_report(client, owner_token).json()
+    create_message(client, sender_token, report["id"])
+
+    client.patch(
+        f"/items/{report['id']}/status",
+        headers=auth_headers(owner_token),
+        json={"status": "recovery_pending"},
+    )
+
+    owner_notifications = client.get(
+        "/notifications",
+        headers=auth_headers(owner_token),
+    )
+
+    assert owner_notifications.status_code == 200
+    assert owner_notifications.json() == []
+
+
+def test_notification_unread_count_and_mark_as_read(client):
+    owner_token = get_token(client, "notification-count-owner@example.com")
+    sender_token = get_token(client, "notification-count-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+    create_message(client, sender_token, report["id"])
+
+    client.patch(
+        f"/items/{report['id']}/status",
+        headers=auth_headers(owner_token),
+        json={"status": "recovery_pending"},
+    )
+
+    headers = auth_headers(sender_token)
+
+    count_before = client.get(
+        "/notifications/unread-count",
+        headers=headers,
+    )
+
+    assert count_before.status_code == 200
+    assert count_before.json()["unread_count"] == 1
+
+    notification = client.get(
+        "/notifications",
+        headers=headers,
+    ).json()[0]
+
+    marked = client.patch(
+        f"/notifications/{notification['id']}/read",
+        headers=headers,
+    )
+
+    assert marked.status_code == 200
+    assert marked.json()["is_read"] is True
+
+    count_after = client.get(
+        "/notifications/unread-count",
+        headers=headers,
+    )
+
+    assert count_after.status_code == 200
+    assert count_after.json()["unread_count"] == 0
+
+
+def test_user_cannot_mark_another_users_notification_as_read(client):
+    owner_token = get_token(client, "notification-private-owner@example.com")
+    sender_token = get_token(client, "notification-private-sender@example.com")
+    other_token = get_token(client, "notification-private-other@example.com")
+
+    report = create_report(client, owner_token).json()
+    create_message(client, sender_token, report["id"])
+
+    client.patch(
+        f"/items/{report['id']}/status",
+        headers=auth_headers(owner_token),
+        json={"status": "recovery_pending"},
+    )
+
+    notification = client.get(
+        "/notifications",
+        headers=auth_headers(sender_token),
+    ).json()[0]
+
+    response = client.patch(
+        f"/notifications/{notification['id']}/read",
+        headers=auth_headers(other_token),
+    )
+
+    assert response.status_code == 403
+
+
+def test_notifications_require_authentication(client):
+    notifications = client.get("/notifications")
+    count = client.get("/notifications/unread-count")
+
+    assert notifications.status_code == 401
+    assert count.status_code == 401
+
+
+def test_same_status_does_not_create_notifications(client):
+    owner_token = get_token(client, "notification-noop-owner@example.com")
+    sender_token = get_token(client, "notification-noop-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+    create_message(client, sender_token, report["id"])
+
+    response = client.patch(
+        f"/items/{report['id']}/status",
+        headers=auth_headers(owner_token),
+        json={"status": "open"},
+    )
+
+    assert response.status_code == 200
+
+    notifications = client.get(
+        "/notifications",
+        headers=auth_headers(sender_token),
+    )
+
+    assert notifications.status_code == 200
+    assert notifications.json() == []

@@ -8,6 +8,9 @@ import {
   getItemById,
   getItemMatches,
   sendMessage,
+  getItemStatusHistory,
+  updateItemStatus,
+  getLoggedInUserId,
 } from "../../../lib/api";
 
 function ItemDetailsContent() {
@@ -28,6 +31,69 @@ function ItemDetailsContent() {
   const [matches, setMatches] = useState([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesError, setMatchesError] = useState("");
+
+  // Status management
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [statusHistory, setStatusHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [newStatus, setNewStatus] = useState("");
+  const [statusNote, setStatusNote] = useState("");
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusFeedback, setStatusFeedback] = useState("");
+  const [statusError, setStatusError] = useState("");
+
+
+  const isOwner =
+    item !== null &&
+    currentUserId !== null &&
+    String(item.user_id) === String(currentUserId);
+
+  console.log("FULL ITEM DATA:", JSON.stringify(item, null, 2));
+  console.log("ITEM OWNER ID:", item?.user_id);
+  console.log("LOGGED-IN USER ID:", currentUserId);
+  console.log("IS OWNER:", isOwner);
+
+  useEffect(() => {
+  setCurrentUserId(getLoggedInUserId());
+  }, []);
+
+  useEffect(() => {
+  let cancelled = false;
+
+  async function loadHistory() {
+    if (!item || !isOwner) {
+      setStatusHistory([]);
+      return;
+    }
+
+    setHistoryLoading(true);
+    setHistoryError("");
+
+    try {
+      const data = await getItemStatusHistory(id);
+
+      if (!cancelled) {
+        setStatusHistory(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      if (!cancelled) {
+        setHistoryError(err.message || "Could not load status history.");
+      }
+    } finally {
+      if (!cancelled) {
+        setHistoryLoading(false);
+      }
+    }
+  }
+
+  loadHistory();
+
+  return () => {
+    cancelled = true;
+  };
+}, [item, id, isOwner]);
+
 
   // Load listing
   useEffect(() => {
@@ -116,6 +182,7 @@ function ItemDetailsContent() {
       cancelled = true;
     };
   }, [item, id]);
+  
 
   // Send message to reporter
   async function handleSendMessage(event) {
@@ -156,6 +223,40 @@ function ItemDetailsContent() {
       setSending(false);
     }
   }
+
+  async function handleStatusUpdate(event) {
+  event.preventDefault();
+
+  setStatusError("");
+  setStatusFeedback("");
+
+  if (!newStatus) {
+    setStatusError("Please select a status.");
+    return;
+  }
+
+  setUpdatingStatus(true);
+
+  try {
+    const updatedItem = await updateItemStatus(
+      id,
+      newStatus,
+      statusNote
+    );
+
+    setItem(updatedItem);
+    setNewStatus("");
+    setStatusNote("");
+    setStatusFeedback("Report status updated successfully!");
+
+    const history = await getItemStatusHistory(id);
+    setStatusHistory(Array.isArray(history) ? history : []);
+  } catch (err) {
+    setStatusError(err.message || "Could not update the report status.");
+  } finally {
+    setUpdatingStatus(false);
+  }
+}
 
   if (loading) {
     return (
@@ -235,13 +336,19 @@ function ItemDetailsContent() {
             </span>
 
             <span
-              className={`rounded-full px-3 py-1 text-sm font-semibold ${
+              className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
                 item.status === "resolved"
                   ? "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
-                  : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                  : item.status === "recovery_pending"
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                    : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
               }`}
             >
-              {item.status === "resolved" ? "Resolved" : "Open"}
+              {item.status === "resolved"
+                ? "Resolved"
+                : item.status === "recovery_pending"
+                  ? "Recovery Pending"
+                  : "Open"}
             </span>
           </div>
 
@@ -284,6 +391,163 @@ function ItemDetailsContent() {
               {item.description}
             </p>
           </section>
+
+                    
+          {/* Owner status management */}
+          {isOwner && (
+            <section className="mt-10 rounded-2xl border border-blue-200 bg-blue-50/60 p-6 dark:border-blue-900 dark:bg-blue-950/30">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Manage Report Status
+              </h2>
+
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                Update the progress of your lost or found report.
+              </p>
+
+              <form onSubmit={handleStatusUpdate} className="mt-5 space-y-4">
+                <div>
+                  <label htmlFor="report-status" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-200">
+                    New status
+                  </label>
+
+                  <select
+                    id="report-status"
+                    value={newStatus}
+                    onChange={(event) => setNewStatus(event.target.value)}
+                    disabled={updatingStatus}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                  >
+                    <option value="">Select a status</option>
+
+                    {item.status === "open" && (
+                      <>
+                        <option value="recovery_pending">Recovery Pending</option>
+                        <option value="resolved">Resolved</option>
+                      </>
+                    )}
+
+                    {item.status === "recovery_pending" && (
+                      <>
+                        <option value="resolved">Resolved</option>
+                        <option value="open">Reopen Report</option>
+                      </>
+                    )}
+
+                    {item.status === "resolved" && (
+                      <option value="open">Reopen Report</option>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="status-note" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-200">
+                    Update note (optional)
+                  </label>
+
+                  <textarea
+                    id="status-note"
+                    value={statusNote}
+                    onChange={(event) => setStatusNote(event.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    placeholder="Add a short explanation about this status change..."
+                    disabled={updatingStatus}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                  />
+
+                  <p className="mt-1 text-right text-xs text-gray-500">
+                    {statusNote.length}/500 characters
+                  </p>
+                </div>
+
+                {statusError && (
+                  <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+                    {statusError}
+                  </p>
+                )}
+
+                {statusFeedback && (
+                  <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
+                    {statusFeedback}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={updatingStatus || !newStatus}
+                  className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {updatingStatus ? "Updating..." : "Update Status"}
+                </button>
+              </form>
+            </section>
+          )}
+
+          
+          {/* Status history */}
+          {isOwner && (
+            <section className="mt-10 border-t border-gray-200 pt-8 dark:border-gray-800">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Status History
+              </h2>
+
+              <p className="mt-2 text-gray-600 dark:text-gray-400">
+                Track the changes made to this report.
+              </p>
+
+              {historyLoading && (
+                <p className="mt-5 text-sm text-gray-500 dark:text-gray-400">
+                  Loading status history...
+                </p>
+              )}
+
+              {historyError && (
+                <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+                  {historyError}
+                </p>
+              )}
+
+              {!historyLoading && !historyError && statusHistory.length === 0 && (
+                <div className="mt-5 rounded-xl border border-dashed border-gray-300 p-5 text-center dark:border-gray-700">
+                  <p className="font-medium text-gray-800 dark:text-gray-200">
+                    No status changes yet
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Status updates will appear here.
+                  </p>
+                </div>
+              )}
+
+              {!historyLoading && statusHistory.length > 0 && (
+                <div className="mt-6 space-y-5">
+                  {statusHistory.map((entry) => (
+                    <div key={entry.id} className="relative border-l-2 border-blue-200 pb-2 pl-6 dark:border-blue-900">
+                      <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full bg-blue-600" />
+
+                      <p className="font-semibold text-gray-900 dark:text-white">
+                        {entry.old_status.replaceAll("_", " ")}
+                        {" → "}
+                        {entry.new_status.replaceAll("_", " ")}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {new Date(entry.created_at).toLocaleString()}
+                      </p>
+
+                      {entry.note && (
+                        <p className="mt-2 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                          {entry.note}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+
+
 
           {/* Possible matches */}
           {isLost && item.status === "open" && (
