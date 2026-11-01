@@ -4,7 +4,11 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getItemById, sendMessage } from "../../../lib/api";
+import {
+  getItemById,
+  getItemMatches,
+  sendMessage,
+} from "../../../lib/api";
 
 function ItemDetailsContent() {
   const params = useParams();
@@ -14,11 +18,18 @@ function ItemDetailsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Messaging state
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
   const [messageFeedback, setMessageFeedback] = useState("");
   const [messageError, setMessageError] = useState("");
 
+  // Matching state
+  const [matches, setMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesError, setMatchesError] = useState("");
+
+  // Load listing
   useEffect(() => {
     let cancelled = false;
 
@@ -52,6 +63,61 @@ function ItemDetailsContent() {
     };
   }, [id]);
 
+  // Load possible matches for the user's lost item
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMatches() {
+      setMatches([]);
+      setMatchesError("");
+
+      if (
+        !item ||
+        item.item_type !== "lost" ||
+        item.status !== "open"
+      ) {
+        setMatchesLoading(false);
+        return;
+      }
+
+      const token = localStorage.getItem("campusfind_token");
+
+      if (!token) {
+        setMatchesLoading(false);
+        return;
+      }
+
+      setMatchesLoading(true);
+
+      try {
+        const data = await getItemMatches(id);
+
+        if (!cancelled) {
+          setMatches(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setMatchesError(
+            err.message || "Could not load possible matches."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setMatchesLoading(false);
+        }
+      }
+    }
+
+    if (item) {
+      loadMatches();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item, id]);
+
+  // Send message to reporter
   async function handleSendMessage(event) {
     event.preventDefault();
 
@@ -80,12 +146,8 @@ function ItemDetailsContent() {
       await sendMessage(id, content);
       setMessageText("");
       setMessageFeedback(
-        "Your message was sent successfully!");
-
-        setTimeout(() => {
-        setMessageFeedback("");
-        }, 3000);
-      
+        "Your message was sent successfully!"
+      );
     } catch (err) {
       setMessageError(
         err.message || "Could not send your message."
@@ -212,6 +274,7 @@ function ItemDetailsContent() {
             </div>
           </div>
 
+          {/* Description */}
           <section className="mt-8">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               Description
@@ -221,6 +284,175 @@ function ItemDetailsContent() {
               {item.description}
             </p>
           </section>
+
+          {/* Possible matches */}
+          {isLost && item.status === "open" && (
+            <section className="mt-10 border-t border-gray-200 pt-8 dark:border-gray-800">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    Possible Matches
+                  </h2>
+
+                  <p className="mt-2 text-gray-600 dark:text-gray-400">
+                    CampusFind compares your lost report with
+                    open found-item reports to identify possible matches.
+                  </p>
+                </div>
+
+                <span className="rounded-full bg-purple-100 px-3 py-1 text-sm font-semibold text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                  Smart Matching
+                </span>
+              </div>
+
+              {matchesLoading && (
+                <div className="mt-5 rounded-xl bg-gray-50 p-5 dark:bg-gray-800">
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Searching for possible matches...
+                  </p>
+                </div>
+              )}
+
+              {matchesError && (
+                <div
+                  role="alert"
+                  className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                >
+                  {matchesError}
+                </div>
+              )}
+
+              {!matchesLoading &&
+                !matchesError &&
+                matches.length === 0 && (
+                  <div className="mt-5 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-gray-700 dark:bg-gray-800/50">
+                    <span className="text-4xl" aria-hidden="true">
+                      🔍
+                    </span>
+
+                    <h3 className="mt-3 font-semibold text-gray-900 dark:text-white">
+                      No possible matches found yet
+                    </h3>
+
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                      We'll show suggestions here when suitable
+                      found-item reports are available.
+                    </p>
+                  </div>
+                )}
+
+              {!matchesLoading &&
+                !matchesError &&
+                matches.length > 0 && (
+                  <div className="mt-6 space-y-4">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      {matches.length} possible{" "}
+                      {matches.length === 1 ? "match" : "matches"} found
+                    </p>
+
+                    {matches.map((match) => {
+                      const foundItem = match.item;
+
+                      return (
+                        <article
+                          key={foundItem.id}
+                          className="overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:shadow-md dark:border-gray-700 dark:bg-gray-900"
+                        >
+                          <div className="flex flex-col sm:flex-row">
+                            <div className="flex h-48 items-center justify-center bg-gray-100 sm:h-auto sm:w-48 sm:shrink-0 dark:bg-gray-800">
+                              {foundItem.image_url ? (
+                                <img
+                                  src={foundItem.image_url}
+                                  alt={foundItem.title}
+                                  className="h-full w-full object-contain"
+                                />
+                              ) : (
+                                <span className="text-5xl" aria-hidden="true">
+                                  🎒
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex-1 p-5">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                  <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 dark:bg-green-950 dark:text-green-300">
+                                    Found Item
+                                  </span>
+
+                                  <h3 className="mt-3 text-lg font-bold text-gray-900 dark:text-white">
+                                    {foundItem.title}
+                                  </h3>
+                                </div>
+
+                                <div className="rounded-lg bg-purple-50 px-3 py-2 text-center dark:bg-purple-950">
+                                  <p className="text-xl font-bold text-purple-700 dark:text-purple-300">
+                                    {match.score}%
+                                  </p>
+                                  <p className="text-xs text-purple-600 dark:text-purple-400">
+                                    Match score
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                                <p>
+                                  <strong>Category:</strong>{" "}
+                                  {foundItem.category}
+                                </p>
+
+                                <p>
+                                  <strong>Location:</strong>{" "}
+                                  {foundItem.location}
+                                </p>
+
+                                <p>
+                                  <strong>Date posted:</strong>{" "}
+                                  {foundItem.created_at
+                                    ? new Date(
+                                        foundItem.created_at
+                                      ).toLocaleDateString()
+                                    : "Unavailable"}
+                                </p>
+                              </div>
+
+                              {Array.isArray(match.reasons) &&
+                                match.reasons.length > 0 && (
+                                  <div className="mt-4">
+                                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                      Why this may match
+                                    </p>
+
+                                    <ul className="mt-2 flex flex-wrap gap-2">
+                                      {match.reasons.map(
+                                        (reason, index) => (
+                                          <li
+                                            key={`${foundItem.id}-${index}`}
+                                            className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                                          >
+                                            {reason}
+                                          </li>
+                                        )
+                                      )}
+                                    </ul>
+                                  </div>
+                                )}
+
+                              <Link
+                                href={`/items/${foundItem.id}`}
+                                className="mt-5 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                              >
+                                View Found Item →
+                              </Link>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+            </section>
+          )}
 
           {/* Contact reporter */}
           <section className="mt-10 border-t border-gray-200 pt-8 dark:border-gray-800">

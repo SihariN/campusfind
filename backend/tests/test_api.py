@@ -963,3 +963,217 @@ def test_image_upload_returns_502_when_cloudinary_fails(client, monkeypatch):
     assert response.json()["detail"] == (
         "Image upload failed. Please try again."
     )
+
+    # ---------------------------------------------------------
+# SMART MATCHING TESTS
+# ---------------------------------------------------------
+
+
+def test_matching_engine_gives_high_score_to_similar_items():
+    from app.matching import calculate_match
+    from types import SimpleNamespace
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+
+    lost = SimpleNamespace(
+        title="Black leather wallet",
+        description="Black leather wallet containing a student ID card.",
+        category="Accessories",
+        location="Campus library",
+        created_at=now,
+    )
+
+    found = SimpleNamespace(
+        title="Black leather wallet found",
+        description="Found a black leather wallet with a student ID card.",
+        category="Accessories",
+        location="Campus library",
+        created_at=now,
+    )
+
+    result = calculate_match(lost, found)
+
+    assert result["score"] >= 80
+    assert "Same category" in result["reasons"]
+    assert "Same location" in result["reasons"]
+
+
+def test_matching_engine_gives_low_score_to_unrelated_items():
+    from app.matching import calculate_match
+    from types import SimpleNamespace
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+
+    lost = SimpleNamespace(
+        title="Black leather wallet",
+        description="A black wallet containing a student ID card.",
+        category="Accessories",
+        location="Campus library",
+        created_at=now,
+    )
+
+    found = SimpleNamespace(
+        title="Silver mobile phone",
+        description="A silver smartphone found near the sports ground.",
+        category="Electronics",
+        location="Sports ground",
+        created_at=now,
+    )
+
+    result = calculate_match(lost, found)
+
+    assert result["score"] < 15
+
+
+def test_matching_endpoint_returns_ranked_found_items(client):
+    owner_token = get_token(client, "matching-owner@example.com")
+    first_token = get_token(client, "matching-first@example.com")
+    second_token = get_token(client, "matching-second@example.com")
+
+    lost_report = client.post(
+        "/items",
+        headers=auth_headers(owner_token),
+        json={
+            "title": "Black leather wallet",
+            "description": "Black wallet containing a student ID card.",
+            "category": "Accessories",
+            "location": "Campus library",
+            "item_type": "lost",
+            "image_url": None,
+        },
+    ).json()
+
+    matching_report = client.post(
+        "/items",
+        headers=auth_headers(first_token),
+        json={
+            "title": "Black leather wallet found",
+            "description": "Found black wallet with student ID card.",
+            "category": "Accessories",
+            "location": "Campus library",
+            "item_type": "found",
+            "image_url": None,
+        },
+    ).json()
+
+    unrelated_report = client.post(
+        "/items",
+        headers=auth_headers(second_token),
+        json={
+            "title": "Silver mobile phone",
+            "description": "A smartphone found near the sports ground.",
+            "category": "Electronics",
+            "location": "Sports ground",
+            "item_type": "found",
+            "image_url": None,
+        },
+    ).json()
+
+    response = client.get(
+        f"/items/{lost_report['id']}/matches",
+        headers=auth_headers(owner_token),
+    )
+
+    assert response.status_code == 200
+
+    results = response.json()
+
+    assert len(results) == 1
+    assert results[0]["item"]["id"] == matching_report["id"]
+    assert results[0]["score"] >= 80
+
+    assert all(
+        result["item"]["id"] != unrelated_report["id"]
+        for result in results
+    )
+
+
+def test_matching_endpoint_requires_authentication(client):
+    response = client.get("/items/1/matches")
+
+    assert response.status_code == 401
+
+
+def test_user_cannot_request_matches_for_another_users_report(client):
+    owner_token = get_token(client, "match-private-owner@example.com")
+    other_token = get_token(client, "match-private-other@example.com")
+
+    report = create_report(client, owner_token).json()
+
+    response = client.get(
+        f"/items/{report['id']}/matches",
+        headers=auth_headers(other_token),
+    )
+
+    assert response.status_code == 404
+
+
+def test_matching_endpoint_rejects_found_item_report(client):
+    token = get_token(client, "match-found-owner@example.com")
+
+    found_report = client.post(
+        "/items",
+        headers=auth_headers(token),
+        json={
+            "title": "Found phone",
+            "description": "A phone found near the library.",
+            "category": "Electronics",
+            "location": "Campus library",
+            "item_type": "found",
+            "image_url": None,
+        },
+    ).json()
+
+    response = client.get(
+        f"/items/{found_report['id']}/matches",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 400
+
+
+def test_matching_endpoint_rejects_resolved_lost_report(client):
+    token = get_token(client, "match-resolved-owner@example.com")
+    report = create_report(client, token).json()
+
+    client.patch(
+        f"/items/{report['id']}/status",
+        headers=auth_headers(token),
+        json={"status": "resolved"},
+    )
+
+    response = client.get(
+        f"/items/{report['id']}/matches",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 400
+
+
+def test_matching_endpoint_excludes_own_found_reports(client):
+    token = get_token(client, "match-own-reports@example.com")
+
+    lost_report = create_report(client, token).json()
+
+    client.post(
+        "/items",
+        headers=auth_headers(token),
+        json={
+            "title": "Black wallet",
+            "description": "A black wallet found near the library.",
+            "category": "Accessories",
+            "location": "Campus library",
+            "item_type": "found",
+            "image_url": None,
+        },
+    )
+
+    response = client.get(
+        f"/items/{lost_report['id']}/matches",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []

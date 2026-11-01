@@ -47,8 +47,35 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     
+
 class ItemStatusUpdate(BaseModel):
-    status: Literal["open", "resolved"]
+    status: Literal["open", "recovery_pending", "resolved"]
+    note: str | None = Field(default=None, max_length=500)
+
+
+class StatusHistoryRead(BaseModel):
+    id: int
+    item_id: int
+    changed_by: int
+    old_status: str
+    new_status: str
+    note: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class NotificationRead(BaseModel):
+    id: int
+    user_id: int
+    item_id: int
+    title: str
+    message: str
+    is_read: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
 
 
 class MessageCreate(BaseModel):

@@ -41,6 +41,26 @@ export async function getItemById(id) {
   return response.json();
 }
 
+export async function getItemMatches(itemId) {
+  const response = await fetch(
+    `${API_BASE}/items/${itemId}/matches`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      data.detail || "Could not load possible matches."
+    );
+  }
+
+  return data;
+}
+
 
 function getAuthHeaders() {
   const token =

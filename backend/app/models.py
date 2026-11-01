@@ -1,7 +1,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Integer, String, Text, ForeignKey
+from sqlalchemy import DateTime, Integer, String, Text, ForeignKey,Column, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -116,6 +116,38 @@ class User(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class StatusHistory(Base):
+    __tablename__ = "status_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    old_status = Column(String(20), nullable=False)
+    new_status = Column(String(20), nullable=False)
+    note = Column(String(500), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
+    title = Column(String(150), nullable=False)
+    message = Column(String(500), nullable=False)
+    is_read = Column(Boolean, default=False, nullable=False)
+    created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,

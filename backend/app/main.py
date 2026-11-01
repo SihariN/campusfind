@@ -1,24 +1,57 @@
 
 from contextlib import asynccontextmanager
+from io import BytesIO
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status, File, UploadFile, Request
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    status,
+    File,
+    UploadFile,
+    Request,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
-
-from app.database import Base, engine, get_db
-from app import models
-from app.models import Item, User,Message
-from app.schemas import ItemCreate, ItemRead, UserCreate, UserRead, UserLogin, TokenResponse, ItemStatusUpdate, MessageCreate, MessageRead
 from sqlalchemy.exc import IntegrityError
-from app.auth import hash_password, verify_password, create_access_token, get_current_user
-
-from app.cloudinary_service import upload_image
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+
+from app.database import Base, engine, get_db
+from app import models
+from app.models import Item, User, Message
+from app.schemas import (
+    ItemCreate,
+    ItemRead,
+    UserCreate,
+    UserRead,
+    UserLogin,
+    TokenResponse,
+    ItemStatusUpdate,
+    MessageCreate,
+    MessageRead,
+    StatusHistoryRead,
+    NotificationRead,
+)
+from app.auth import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    get_current_user,
+)
+from app.cloudinary_service import upload_image
+from app.matching import calculate_match
+
+
+# ---------------------------------------------------------
+# APPLICATION SETUP
+# ---------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,7 +62,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CampusFind API",
     description="API for the CampusFind lost-and-found platform",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -51,6 +84,11 @@ app.add_middleware(
 
 DbSession = Annotated[Session, Depends(get_db)]
 
+
+# ---------------------------------------------------------
+# HELPER FUNCTIONS
+# ---------------------------------------------------------
+
 def message_response(db, message):
     sender = db.get(User, message.sender_id)
     recipient = db.get(User, message.recipient_id)
@@ -67,6 +105,11 @@ def message_response(db, message):
         "created_at": message.created_at,
     }
 
+
+# ---------------------------------------------------------
+# GENERAL ENDPOINTS
+# ---------------------------------------------------------
+
 @app.get("/")
 def root():
     return {"message": "Welcome to CampusFind API"}
@@ -79,19 +122,22 @@ def health_check():
 
 @app.get("/db-check")
 def database_check():
-    from sqlalchemy import text
-
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
 
     return {"database": "connected"}
 
 
+# ---------------------------------------------------------
+# LIST AND SEARCH ITEMS
+# ---------------------------------------------------------
+
 @app.get("/items", response_model=list[ItemRead])
 def list_items(
     db: DbSession,
     item_type: str | None = Query(
-        default=None, pattern="^(lost|found)$"
+        default=None,
+        pattern="^(lost|found)$",
     ),
     category: str | None = Query(default=None, max_length=50),
     search: str | None = Query(default=None, max_length=100),
@@ -116,12 +162,91 @@ def list_items(
     return db.scalars(statement).all()
 
 
+# ---------------------------------------------------------
+# SMART MATCHING
+# ---------------------------------------------------------
+
+@app.get("/items/{item_id}/matches")
+def get_item_matches(
+    item_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    item = db.get(Item, item_id)
+
+    if item is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Item not found.",
+        )
+
+    # Return 404 to avoid revealing another user's report.
+    if item.user_id != current_user.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Item not found.",
+        )
+
+    if item.item_type != "lost":
+        raise HTTPException(
+            status_code=400,
+            detail="Matching is available for lost reports only.",
+        )
+
+    if item.status != "open":
+        raise HTTPException(
+            status_code=400,
+            detail="Matching is available for open reports only.",
+        )
+
+    statement = (
+        select(Item)
+        .where(
+            Item.item_type == "found",
+            Item.status == "open",
+            Item.user_id != current_user.id,
+        )
+    )
+
+    found_items = db.scalars(statement).all()
+
+    matches = []
+
+    for found_item in found_items:
+        match_result = calculate_match(item, found_item)
+
+        score = match_result["score"]
+        reasons = match_result["reasons"]
+
+        if score >= 15:
+            matches.append({
+                "item": ItemRead.model_validate(found_item).model_dump(),
+                "score": score,
+                "reasons": reasons,
+            })
+
+    matches.sort(
+        key=lambda match: match["score"],
+        reverse=True,
+    )
+
+    return matches
+
+
+# ---------------------------------------------------------
+# IMAGE UPLOAD
+# ---------------------------------------------------------
+
 @app.post("/uploads/image")
 async def upload_item_image(
     current_user: Annotated[User, Depends(get_current_user)],
     file: UploadFile = File(...),
 ):
-    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    allowed_types = {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    }
 
     if file.content_type not in allowed_types:
         raise HTTPException(
@@ -143,7 +268,6 @@ async def upload_item_image(
             detail="The uploaded file is empty.",
         )
 
-    # Check the actual file signature, not just its claimed MIME type.
     is_jpeg = contents.startswith(b"\xff\xd8\xff")
     is_png = contents.startswith(b"\x89PNG\r\n\x1a\n")
     is_webp = (
@@ -158,10 +282,9 @@ async def upload_item_image(
         )
 
     try:
-        from io import BytesIO
-
         image_url = upload_image(BytesIO(contents))
         return {"image_url": image_url}
+
     except Exception:
         raise HTTPException(
             status_code=502,
@@ -169,7 +292,15 @@ async def upload_item_image(
         )
 
 
-@app.post("/items", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
+# ---------------------------------------------------------
+# CREATE ITEM
+# ---------------------------------------------------------
+
+@app.post(
+    "/items",
+    response_model=ItemRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_item(
     payload: ItemCreate,
     db: DbSession,
@@ -185,10 +316,17 @@ def create_item(
         image_url=str(payload.image_url) if payload.image_url else None,
         status="open",
     )
+
     db.add(item)
     db.commit()
     db.refresh(item)
+
     return item
+
+
+# ---------------------------------------------------------
+# GET MY ITEMS
+# ---------------------------------------------------------
 
 @app.get("/items/mine", response_model=list[ItemRead])
 def get_my_items(
@@ -203,6 +341,11 @@ def get_my_items(
 
     return db.scalars(statement).all()
 
+
+# ---------------------------------------------------------
+# GET SINGLE ITEM
+# ---------------------------------------------------------
+
 @app.get("/items/{item_id}", response_model=ItemRead)
 def get_item(item_id: int, db: DbSession):
     item = db.get(Item, item_id)
@@ -216,6 +359,10 @@ def get_item(item_id: int, db: DbSession):
     return item
 
 
+# ---------------------------------------------------------
+# MESSAGING
+# ---------------------------------------------------------
+
 @app.post(
     "/items/{item_id}/messages",
     response_model=MessageRead,
@@ -228,6 +375,7 @@ def send_message(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     content = payload.content.strip()
+
     if not content:
         raise HTTPException(
             status_code=422,
@@ -235,6 +383,7 @@ def send_message(
         )
 
     item = db.get(Item, item_id)
+
     if item is None or item.status != "open":
         raise HTTPException(
             status_code=404,
@@ -259,9 +408,11 @@ def send_message(
         recipient_id=item.user_id,
         content=content,
     )
+
     db.add(message)
     db.commit()
     db.refresh(message)
+
     return message_response(db, message)
 
 
@@ -275,8 +426,13 @@ def get_inbox(
         .where(Message.recipient_id == current_user.id)
         .order_by(Message.created_at.desc())
     )
+
     messages = db.scalars(statement).all()
-    return [message_response(db, message) for message in messages]
+
+    return [
+        message_response(db, message)
+        for message in messages
+    ]
 
 
 @app.get("/messages/sent", response_model=list[MessageRead])
@@ -289,11 +445,19 @@ def get_sent_messages(
         .where(Message.sender_id == current_user.id)
         .order_by(Message.created_at.desc())
     )
+
     messages = db.scalars(statement).all()
-    return [message_response(db, message) for message in messages]
+
+    return [
+        message_response(db, message)
+        for message in messages
+    ]
 
 
-@app.patch("/messages/{message_id}/read", response_model=MessageRead)
+@app.patch(
+    "/messages/{message_id}/read",
+    response_model=MessageRead,
+)
 def mark_message_read(
     message_id: int,
     db: DbSession,
@@ -308,10 +472,16 @@ def mark_message_read(
         )
 
     message.is_read = True
+
     db.commit()
     db.refresh(message)
+
     return message_response(db, message)
 
+
+# ---------------------------------------------------------
+# AUTHENTICATION
+# ---------------------------------------------------------
 
 @app.post(
     "/auth/register",
@@ -329,6 +499,7 @@ def register_user(
     existing_user = db.scalar(
         select(User).where(User.email == email)
     )
+
     if existing_user:
         raise HTTPException(
             status_code=409,
@@ -347,6 +518,7 @@ def register_user(
     try:
         db.commit()
         db.refresh(user)
+
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -364,7 +536,6 @@ def login_user(
     payload: UserLogin,
     db: DbSession,
 ):
-    # Keep your existing function body here.
     email = str(payload.email).strip().lower()
 
     user = db.scalar(
@@ -374,7 +545,8 @@ def login_user(
     password = payload.password.get_secret_value()
 
     if user is None or not verify_password(
-        password, user.hashed_password
+        password,
+        user.hashed_password,
     ):
         raise HTTPException(
             status_code=401,
@@ -389,6 +561,10 @@ def login_user(
         "token_type": "bearer",
     }
 
+
+# ---------------------------------------------------------
+# UPDATE ITEM
+# ---------------------------------------------------------
 
 @app.put("/items/{item_id}", response_model=ItemRead)
 def update_item(
@@ -407,7 +583,6 @@ def update_item(
 
     update_data = item_data.model_dump()
 
-    # Convert Pydantic HttpUrl to a regular string for PostgreSQL.
     if update_data.get("image_url") is not None:
         update_data["image_url"] = str(update_data["image_url"])
 
@@ -420,6 +595,9 @@ def update_item(
     return item
 
 
+# ---------------------------------------------------------
+# DELETE ITEM
+# ---------------------------------------------------------
 
 @app.delete("/items/{item_id}")
 def delete_item(
@@ -441,6 +619,10 @@ def delete_item(
     return {"message": "Report deleted successfully."}
 
 
+# ---------------------------------------------------------
+# RECOVERY WORKFLOW / STATUS UPDATE
+# ---------------------------------------------------------
+
 @app.patch("/items/{item_id}/status", response_model=ItemRead)
 def update_item_status(
     item_id: int,
@@ -456,8 +638,168 @@ def update_item_status(
             detail="Report not found.",
         )
 
-    item.status = status_data.status
+    old_status = item.status
+    new_status = status_data.status
+
+    allowed_transitions = {
+        "open": ["recovery_pending", "resolved"],
+        "recovery_pending": ["open", "resolved"],
+        "resolved": ["open"],
+    }
+
+    if new_status == old_status:
+        return item
+
+    if new_status not in allowed_transitions.get(old_status, []):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot change status from {old_status} to {new_status}.",
+        )
+
+    history = models.StatusHistory(
+        item_id=item.id,
+        changed_by=current_user.id,
+        old_status=old_status,
+        new_status=new_status,
+        note=status_data.note.strip() if status_data.note else None,
+    )
+
+    db.add(history)
+
+    item.status = new_status
+
+    participants = (
+        db.query(Message.sender_id)
+        .filter(Message.item_id == item.id)
+        .distinct()
+        .all()
+    )
+
+    notification_message = (
+        f'The status of "{item.title}" changed from '
+        f"{old_status.replace('_', ' ')} to "
+        f"{new_status.replace('_', ' ')}."
+    )
+
+    for participant in participants:
+        participant_id = participant[0]
+
+        if participant_id == current_user.id:
+            continue
+
+        notification = models.Notification(
+            user_id=participant_id,
+            item_id=item.id,
+            title="Report status updated",
+            message=notification_message,
+        )
+
+        db.add(notification)
+
     db.commit()
     db.refresh(item)
 
     return item
+
+
+# ---------------------------------------------------------
+# STATUS HISTORY
+# ---------------------------------------------------------
+
+@app.get(
+    "/items/{item_id}/status-history",
+    response_model=list[StatusHistoryRead],
+)
+def get_status_history(
+    item_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    item = db.get(Item, item_id)
+
+    if item is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Item not found.",
+        )
+
+    if item.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only view the history of your own reports.",
+        )
+
+    return (
+        db.query(models.StatusHistory)
+        .filter(models.StatusHistory.item_id == item_id)
+        .order_by(models.StatusHistory.created_at.desc())
+        .all()
+    )
+
+
+# ---------------------------------------------------------
+# NOTIFICATIONS
+# ---------------------------------------------------------
+
+@app.get(
+    "/notifications",
+    response_model=list[NotificationRead],
+)
+def get_notifications(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return (
+        db.query(models.Notification)
+        .filter(models.Notification.user_id == current_user.id)
+        .order_by(models.Notification.created_at.desc())
+        .all()
+    )
+
+
+@app.get("/notifications/unread-count")
+def get_unread_notification_count(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    count = (
+        db.query(models.Notification)
+        .filter(
+            models.Notification.user_id == current_user.id,
+            models.Notification.is_read.is_(False),
+        )
+        .count()
+    )
+
+    return {"unread_count": count}
+
+
+@app.patch(
+    "/notifications/{notification_id}/read",
+    response_model=NotificationRead,
+)
+def mark_notification_as_read(
+    notification_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    notification = db.get(models.Notification, notification_id)
+
+    if notification is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Notification not found.",
+        )
+
+    if notification.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot update another user's notification.",
+        )
+
+    notification.is_read = True
+
+    db.commit()
+    db.refresh(notification)
+
+    return notification
