@@ -241,6 +241,13 @@ useEffect(() => {
                   )}
                 </Link>
 
+                <Link
+                  href="/profile"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                >
+                  👤 Profile
+                </Link>
+
 
                 <button
                   type="button"

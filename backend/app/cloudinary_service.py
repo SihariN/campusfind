@@ -22,3 +22,12 @@ def upload_image(file):
         resource_type="image",
     )
     return result["secure_url"]
+
+
+def upload_profile_picture(file):
+    result = cloudinary.uploader.upload(
+        file,
+        folder="campusfind/profiles",
+        resource_type="image",
+    )
+    return result["secure_url"]

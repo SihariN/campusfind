@@ -205,3 +205,76 @@ export async function markNotificationRead(notificationId) {
     "Could not mark notification as read."
   );
 }
+
+
+// Get the logged-in user's profile.
+export async function getMyProfile() {
+  const response = await fetch(`${API_BASE}/users/me`, {
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response, "Could not load your profile.");
+}
+
+// Update the user's profile information.
+export async function updateMyProfile(profileData) {
+  const response = await fetch(`${API_BASE}/users/me`, {
+    method: "PATCH",
+    headers: {
+      ...getAuthHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(profileData),
+  });
+
+  return handleResponse(response, "Could not update your profile.");
+}
+
+// Upload or replace the profile picture.
+export async function uploadProfilePicture(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(
+    `${API_BASE}/users/me/profile-picture`,
+    {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: formData,
+    }
+  );
+
+  return handleResponse(response, "Could not upload profile picture.");
+}
+
+// Remove the profile picture.
+export async function removeProfilePicture() {
+  const response = await fetch(
+    `${API_BASE}/users/me/profile-picture`,
+    {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    }
+  );
+
+  return handleResponse(response, "Could not remove profile picture.");
+}
+
+
+// Change the logged-in user's password.
+export async function changeMyPassword(passwordData) {
+  const response = await fetch(
+    `${API_BASE}/users/me/change-password`,
+    {
+      method: "PATCH",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(passwordData),
+    }
+  );
+
+  return handleResponse(response, "Could not change your password.");
+}

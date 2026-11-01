@@ -38,6 +38,9 @@ from app.schemas import (
     MessageRead,
     StatusHistoryRead,
     NotificationRead,
+    UserProfileRead,
+    UserProfileUpdate,
+    ChangePasswordRequest
 )
 from app.auth import (
     hash_password,
@@ -45,7 +48,7 @@ from app.auth import (
     create_access_token,
     get_current_user,
 )
-from app.cloudinary_service import upload_image
+from app.cloudinary_service import upload_image, upload_profile_picture
 from app.matching import calculate_match
 
 
@@ -559,6 +562,168 @@ def login_user(
     return {
         "access_token": token,
         "token_type": "bearer",
+    }
+
+
+
+# ---------------------------------------------------------
+# USER PROFILE
+# ---------------------------------------------------------
+
+@app.get("/users/me", response_model=UserProfileRead)
+def get_my_profile(
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return current_user
+
+
+@app.patch("/users/me", response_model=UserProfileRead)
+def update_my_profile(
+    profile_data: UserProfileUpdate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    update_data = profile_data.model_dump(exclude_unset=True)
+
+    if "full_name" in update_data:
+        full_name = update_data["full_name"]
+
+        if full_name is not None:
+            full_name = full_name.strip()
+
+            if len(full_name) < 2:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Name must contain at least 2 characters.",
+                )
+
+        current_user.full_name = full_name
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
+# ---------------------------------------------------------
+# PROFILE PICTURE
+# ---------------------------------------------------------
+
+@app.post("/users/me/profile-picture", response_model=UserProfileRead)
+async def upload_my_profile_picture(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    file: UploadFile = File(...),
+):
+    allowed_types = {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    }
+
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG, and WebP images are allowed.",
+        )
+
+    contents = await file.read()
+
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="Image must be smaller than 5 MB.",
+        )
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="Please select an image.",
+        )
+
+    # Verify the actual image signature.
+    is_jpeg = contents.startswith(b"\xff\xd8\xff")
+    is_png = contents.startswith(b"\x89PNG\r\n\x1a\n")
+    is_webp = (
+        len(contents) >= 12
+        and contents.startswith(b"RIFF")
+        and contents[8:12] == b"WEBP"
+    )
+
+    if not (is_jpeg or is_png or is_webp):
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is not a valid JPEG, PNG, or WebP image.",
+        )
+
+    try:
+        image_url = upload_profile_picture(BytesIO(contents))
+
+        current_user.profile_picture_url = image_url
+
+        db.commit()
+        db.refresh(current_user)
+
+        return current_user
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not upload profile picture. Please try again.",
+        )
+
+
+@app.delete("/users/me/profile-picture", response_model=UserProfileRead)
+def remove_my_profile_picture(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    current_user.profile_picture_url = None
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
+# ---------------------------------------------------------
+# CHANGE PASSWORD
+# ---------------------------------------------------------
+
+@app.patch("/users/me/change-password")
+def change_my_password(
+    password_data: ChangePasswordRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    # Verify the current password.
+    if not verify_password(
+        password_data.current_password,
+        current_user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Current password is incorrect.",
+        )
+
+    # Prevent reusing the current password.
+    if verify_password(
+        password_data.new_password,
+        current_user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from your current password.",
+        )
+
+    # Hash and save the new password.
+    current_user.hashed_password = hash_password(
+        password_data.new_password
+    )
+
+    db.commit()
+
+    return {
+        "message": "Password changed successfully."
     }
 
 
