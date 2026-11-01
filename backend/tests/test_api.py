@@ -29,7 +29,8 @@ TestingSessionLocal = sessionmaker(
 @pytest.fixture
 def client():
     limiter.reset()
-    # Create a clean database for each test.
+
+    # Create a clean in-memory test database.
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
 
@@ -42,14 +43,16 @@ def client():
 
     app.dependency_overrides[get_db] = override_get_db
 
-    # Do not use TestClient as a context manager here:
-    # we don't want the app lifespan to create tables
-    # in your real PostgreSQL database.
-    with TestClient(app) as test_client:
-        yield test_client
+    # Do not enter TestClient as a context manager:
+    # entering it would start the app lifespan and connect to the real DB.
+    test_client = TestClient(app)
 
-    app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=test_engine)
+    try:
+        yield test_client
+    finally:
+        test_client.close()
+        app.dependency_overrides.clear()
+        Base.metadata.drop_all(bind=test_engine)
 
 
 def register_user(client, email):
@@ -384,3 +387,579 @@ def test_create_report_rejects_invalid_token(client):
     )
 
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------
+# ADDITIONAL CAMPUSFIND API TESTS
+# ---------------------------------------------------------
+
+
+def get_token(client, email):
+    """Register and log in a test user, then return their token."""
+    register_response = register_user(client, email)
+    assert register_response.status_code == 201
+
+    login_response = login_user(client, email)
+    assert login_response.status_code == 200
+
+    return login_response.json()["access_token"]
+
+
+def auth_headers(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_health_endpoint(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "healthy"}
+
+
+# -------------------------
+# AUTHENTICATION TESTS
+# -------------------------
+
+
+def test_inbox_requires_authentication(client):
+    response = client.get("/messages/inbox")
+
+    assert response.status_code == 401
+
+
+def test_sent_messages_require_authentication(client):
+    response = client.get("/messages/sent")
+
+    assert response.status_code == 401
+
+
+def test_invalid_token_cannot_access_protected_endpoints(client):
+    headers = auth_headers("invalid-token")
+
+    inbox = client.get("/messages/inbox", headers=headers)
+    sent = client.get("/messages/sent", headers=headers)
+    mine = client.get("/items/mine", headers=headers)
+
+    assert inbox.status_code == 401
+    assert sent.status_code == 401
+    assert mine.status_code == 401
+
+
+def test_registration_rejects_invalid_email(client):
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "not-an-email",
+            "password": "CampusFindTest123!",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_registration_rejects_short_password(client):
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "short@example.com",
+            "password": "123",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_login_email_is_case_insensitive(client):
+    register_user(client, "student@example.com")
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "STUDENT@EXAMPLE.COM",
+            "password": "CampusFindTest123!",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["access_token"]
+
+
+# -------------------------
+# LISTING TESTS
+# -------------------------
+
+
+def test_user_can_view_single_listing(client):
+    token = get_token(client, "listing-owner@example.com")
+    report = create_report(client, token).json()
+
+    response = client.get(f"/items/{report['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == report["id"]
+    assert response.json()["title"] == "Test wallet"
+
+
+def test_nonexistent_listing_returns_404(client):
+    response = client.get("/items/99999")
+
+    assert response.status_code == 404
+
+
+def test_listing_filters_by_type(client):
+    token = get_token(client, "type-filter@example.com")
+    headers = auth_headers(token)
+
+    lost_response = create_report(client, token, "Lost wallet")
+    assert lost_response.status_code == 201
+
+    found_response = client.post(
+        "/items",
+        headers=headers,
+        json={
+            "title": "Found phone",
+            "description": "A phone found near the library.",
+            "category": "Electronics",
+            "location": "Campus library",
+            "item_type": "found",
+            "image_url": None,
+        },
+    )
+    assert found_response.status_code == 201
+
+    response = client.get("/items", params={"item_type": "found"})
+
+    assert response.status_code == 200
+    assert all(item["item_type"] == "found" for item in response.json())
+
+
+def test_listing_search_finds_matching_title(client):
+    token = get_token(client, "search-test@example.com")
+
+    create_report(client, token, "Blue student wallet")
+
+    response = client.get("/items", params={"search": "wallet"})
+
+    assert response.status_code == 200
+    assert any(
+        "wallet" in item["title"].lower()
+        for item in response.json()
+    )
+
+
+def test_listing_filter_rejects_invalid_item_type(client):
+    response = client.get(
+        "/items",
+        params={"item_type": "stolen"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_listing_filter_rejects_too_long_search(client):
+    response = client.get(
+        "/items",
+        params={"search": "x" * 101},
+    )
+
+    assert response.status_code == 422
+
+
+def test_user_cannot_see_another_users_private_reports(client):
+    owner_token = get_token(client, "private-owner@example.com")
+    other_token = get_token(client, "private-viewer@example.com")
+
+    report = create_report(client, owner_token).json()
+
+    response = client.get(
+        "/items/mine",
+        headers=auth_headers(other_token),
+    )
+
+    assert response.status_code == 200
+    assert all(item["id"] != report["id"] for item in response.json())
+
+
+def test_owner_can_update_own_report(client):
+    token = get_token(client, "update-owner@example.com")
+    report = create_report(client, token).json()
+
+    response = client.put(
+        f"/items/{report['id']}",
+        headers=auth_headers(token),
+        json={
+            "title": "Updated wallet",
+            "description": "The wallet is black and has a student card.",
+            "category": "Accessories",
+            "location": "Main library",
+            "item_type": "lost",
+            "image_url": None,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Updated wallet"
+    assert response.json()["location"] == "Main library"
+
+
+def test_owner_can_delete_own_report(client):
+    token = get_token(client, "delete-owner@example.com")
+    report = create_report(client, token).json()
+
+    response = client.delete(
+        f"/items/{report['id']}",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Report deleted successfully."
+
+    missing = client.get(f"/items/{report['id']}")
+    assert missing.status_code == 404
+
+
+def test_user_cannot_delete_nonexistent_report(client):
+    token = get_token(client, "delete-missing@example.com")
+
+    response = client.delete(
+        "/items/99999",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 404
+
+
+def test_item_creation_rejects_invalid_item_type(client):
+    token = get_token(client, "invalid-type@example.com")
+
+    response = client.post(
+        "/items",
+        headers=auth_headers(token),
+        json={
+            "title": "Test item",
+            "description": "A description for testing.",
+            "category": "Accessories",
+            "location": "Library",
+            "item_type": "stolen",
+            "image_url": None,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_item_creation_rejects_too_short_title(client):
+    token = get_token(client, "short-title@example.com")
+
+    response = client.post(
+        "/items",
+        headers=auth_headers(token),
+        json={
+            "title": "AB",
+            "description": "A description for testing.",
+            "category": "Accessories",
+            "location": "Library",
+            "item_type": "lost",
+            "image_url": None,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+# -------------------------
+# MESSAGING TESTS
+# -------------------------
+
+
+def create_message(client, sender_token, item_id, content="Hello, I think this is mine."):
+    return client.post(
+        f"/items/{item_id}/messages",
+        headers=auth_headers(sender_token),
+        json={"content": content},
+    )
+
+
+def test_user_can_send_message_to_listing_owner(client):
+    owner_token = get_token(client, "message-owner@example.com")
+    sender_token = get_token(client, "message-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+
+    response = create_message(
+        client,
+        sender_token,
+        report["id"],
+    )
+
+    assert response.status_code == 201
+    assert response.json()["content"] == "Hello, I think this is mine."
+    assert response.json()["sender_email"] == "message-sender@example.com"
+    assert response.json()["recipient_email"] == "message-owner@example.com"
+    assert response.json()["is_read"] is False
+
+
+def test_message_sending_requires_authentication(client):
+    owner_token = get_token(client, "message-auth-owner@example.com")
+    report = create_report(client, owner_token).json()
+
+    response = client.post(
+        f"/items/{report['id']}/messages",
+        json={"content": "Hello"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_user_cannot_message_themselves(client):
+    token = get_token(client, "self-message@example.com")
+    report = create_report(client, token).json()
+
+    response = create_message(client, token, report["id"])
+
+    assert response.status_code == 400
+
+
+def test_user_cannot_message_closed_listing(client):
+    owner_token = get_token(client, "closed-owner@example.com")
+    sender_token = get_token(client, "closed-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+
+    close_response = client.patch(
+        f"/items/{report['id']}/status",
+        headers=auth_headers(owner_token),
+        json={"status": "resolved"},
+    )
+    assert close_response.status_code == 200
+
+    response = create_message(client, sender_token, report["id"])
+
+    assert response.status_code == 404
+
+
+def test_message_to_nonexistent_listing_returns_404(client):
+    sender_token = get_token(client, "missing-listing-sender@example.com")
+
+    response = create_message(client, sender_token, 99999)
+
+    assert response.status_code == 404
+
+
+def test_message_rejects_whitespace_only_content(client):
+    owner_token = get_token(client, "blank-owner@example.com")
+    sender_token = get_token(client, "blank-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+
+    response = create_message(
+        client,
+        sender_token,
+        report["id"],
+        "     ",
+    )
+
+    assert response.status_code == 422
+
+
+def test_message_rejects_content_over_2000_characters(client):
+    owner_token = get_token(client, "long-owner@example.com")
+    sender_token = get_token(client, "long-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+
+    response = create_message(
+        client,
+        sender_token,
+        report["id"],
+        "x" * 2001,
+    )
+
+    assert response.status_code == 422
+
+
+def test_recipient_can_view_received_message_in_inbox(client):
+    owner_token = get_token(client, "inbox-owner@example.com")
+    sender_token = get_token(client, "inbox-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+    sent = create_message(client, sender_token, report["id"]).json()
+
+    response = client.get(
+        "/messages/inbox",
+        headers=auth_headers(owner_token),
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["id"] == sent["id"]
+    assert response.json()[0]["sender_email"] == "inbox-sender@example.com"
+
+
+def test_sender_can_view_sent_message(client):
+    owner_token = get_token(client, "sent-owner@example.com")
+    sender_token = get_token(client, "sent-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+    sent = create_message(client, sender_token, report["id"]).json()
+
+    response = client.get(
+        "/messages/sent",
+        headers=auth_headers(sender_token),
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["id"] == sent["id"]
+    assert response.json()[0]["recipient_email"] == "sent-owner@example.com"
+
+
+def test_unrelated_user_cannot_view_another_users_inbox(client):
+    owner_token = get_token(client, "inbox-private-owner@example.com")
+    sender_token = get_token(client, "inbox-private-sender@example.com")
+    unrelated_token = get_token(client, "inbox-unrelated@example.com")
+
+    report = create_report(client, owner_token).json()
+    create_message(client, sender_token, report["id"])
+
+    response = client.get(
+        "/messages/inbox",
+        headers=auth_headers(unrelated_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_unrelated_user_cannot_view_another_users_sent_messages(client):
+    owner_token = get_token(client, "sent-private-owner@example.com")
+    sender_token = get_token(client, "sent-private-sender@example.com")
+    unrelated_token = get_token(client, "sent-unrelated@example.com")
+
+    report = create_report(client, owner_token).json()
+    create_message(client, sender_token, report["id"])
+
+    response = client.get(
+        "/messages/sent",
+        headers=auth_headers(unrelated_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_recipient_can_mark_message_as_read(client):
+    owner_token = get_token(client, "read-owner@example.com")
+    sender_token = get_token(client, "read-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+    sent = create_message(client, sender_token, report["id"]).json()
+
+    response = client.patch(
+        f"/messages/{sent['id']}/read",
+        headers=auth_headers(owner_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["is_read"] is True
+
+
+def test_sender_cannot_mark_own_message_as_read(client):
+    owner_token = get_token(client, "read-private-owner@example.com")
+    sender_token = get_token(client, "read-private-sender@example.com")
+
+    report = create_report(client, owner_token).json()
+    sent = create_message(client, sender_token, report["id"]).json()
+
+    response = client.patch(
+        f"/messages/{sent['id']}/read",
+        headers=auth_headers(sender_token),
+    )
+
+    assert response.status_code == 404
+
+
+def test_unrelated_user_cannot_mark_message_as_read(client):
+    owner_token = get_token(client, "read-unrelated-owner@example.com")
+    sender_token = get_token(client, "read-unrelated-sender@example.com")
+    unrelated_token = get_token(client, "read-unrelated-user@example.com")
+
+    report = create_report(client, owner_token).json()
+    sent = create_message(client, sender_token, report["id"]).json()
+
+    response = client.patch(
+        f"/messages/{sent['id']}/read",
+        headers=auth_headers(unrelated_token),
+    )
+
+    assert response.status_code == 404
+
+
+def test_marking_nonexistent_message_as_read_returns_404(client):
+    token = get_token(client, "read-missing@example.com")
+
+    response = client.patch(
+        "/messages/99999/read",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 404
+
+
+# -------------------------
+# IMAGE UPLOAD TESTS
+# -------------------------
+
+
+def test_valid_png_upload_returns_image_url(client, monkeypatch):
+    token = get_token(client, "valid-upload@example.com")
+
+    # Mock Cloudinary so this test never makes a real external upload.
+    monkeypatch.setattr(
+        "app.main.upload_image",
+        lambda image_file: "https://example.com/test-image.png",
+    )
+
+    response = client.post(
+        "/uploads/image",
+        headers=auth_headers(token),
+        files={
+            "file": (
+                "test.png",
+                b"\x89PNG\r\n\x1a\n" + b"test-image-data",
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["image_url"] == "https://example.com/test-image.png"
+
+
+def test_image_upload_returns_502_when_cloudinary_fails(client, monkeypatch):
+    token = get_token(client, "failed-upload@example.com")
+
+    def failed_upload(image_file):
+        raise Exception("Simulated upload failure")
+
+    monkeypatch.setattr(
+        "app.main.upload_image",
+        failed_upload,
+    )
+
+    response = client.post(
+        "/uploads/image",
+        headers=auth_headers(token),
+        files={
+            "file": (
+                "test.png",
+                b"\x89PNG\r\n\x1a\n" + b"test-image-data",
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == (
+        "Image upload failed. Please try again."
+    )
