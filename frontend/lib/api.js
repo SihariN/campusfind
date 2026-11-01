@@ -163,3 +163,45 @@ export function getLoggedInUserId() {
     return null;
   }
 }
+
+// Get all notifications for the logged-in user.
+export async function getNotifications() {
+  const response = await fetch(`${API_BASE}/notifications`, {
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response, "Could not load notifications.");
+}
+
+// Get the number of unread notifications.
+export async function getUnreadNotificationCount() {
+  const response = await fetch(
+    `${API_BASE}/notifications/unread-count`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  return handleResponse(
+    response,
+    "Could not load unread notification count."
+  );
+}
+
+// Mark a notification as read.
+export async function markNotificationRead(notificationId) {
+  const response = await fetch(
+    `${API_BASE}/notifications/${notificationId}/read`,
+    {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+    }
+  );
+
+  return handleResponse(
+    response,
+    "Could not mark notification as read."
+  );
+}

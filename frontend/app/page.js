@@ -4,7 +4,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getItems, getInbox } from "../lib/api";
+import {
+  getItems,
+  getInbox,
+  getUnreadNotificationCount,
+} from "../lib/api";
 
 const categories = [
   "Electronics",
@@ -28,6 +32,7 @@ export default function Home() {
 
   const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   // Load saved login and theme preferences.
   useEffect(() => {
@@ -81,6 +86,41 @@ export default function Home() {
     window.removeEventListener("focus", loadUnreadCount);
   };
 }, [isLoggedIn]);
+
+// Load unread notification count.
+useEffect(() => {
+  if (!isLoggedIn) {
+    setUnreadNotificationCount(0);
+    return;
+  }
+
+  let cancelled = false;
+
+  const loadNotificationCount = async () => {
+    try {
+      const data = await getUnreadNotificationCount();
+
+      if (!cancelled) {
+        setUnreadNotificationCount(data.unread_count || 0);
+      }
+    } catch (error) {
+      if (!cancelled) {
+        setUnreadNotificationCount(0);
+      }
+    }
+  };
+
+  loadNotificationCount();
+
+  window.addEventListener("focus", loadNotificationCount);
+
+  return () => {
+    cancelled = true;
+    window.removeEventListener("focus", loadNotificationCount);
+  };
+}, [isLoggedIn]);
+
+
   // Load and filter listings.
   useEffect(() => {
     let cancelled = false;
@@ -173,6 +213,19 @@ export default function Home() {
                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                 >
                   My Reports
+                </Link>
+
+                <Link
+                  href="/notifications"
+                  className="rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-700 transition hover:bg-purple-100 dark:border-purple-900 dark:bg-purple-950 dark:text-purple-300 dark:hover:bg-purple-900"
+                >
+                  🔔 Notifications
+
+                  {unreadNotificationCount > 0 && (
+                    <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+                      {unreadNotificationCount}
+                    </span>
+                  )}
                 </Link>
 
                 
