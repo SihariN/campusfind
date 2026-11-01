@@ -25,6 +25,12 @@ const initialForm = {
   image_url: "",
 };
 
+const inputClass =
+  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-400 dark:focus:ring-blue-900";
+
+const labelClass =
+  "mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200";
+
 export default function ReportPage() {
   const [form, setForm] = useState(initialForm);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -198,36 +204,37 @@ export default function ReportPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
+    <main className="min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
+      <header className="border-b border-slate-200 bg-white transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-4">
           <Link
             href="/"
-            className="text-2xl font-bold tracking-tight text-blue-700"
+            className="text-2xl font-bold tracking-tight text-blue-700 dark:text-blue-400"
           >
             CampusFind
           </Link>
 
           <Link
             href="/"
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:border-gray-600"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-blue-500 dark:hover:bg-slate-800 dark:hover:text-blue-400"
           >
-            ← Back to home
+            <span aria-hidden="true">←</span>
+            Back to home
           </Link>
         </div>
       </header>
 
       <section className="mx-auto max-w-3xl px-5 py-10 sm:py-14">
         <div className="mb-8">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-blue-700">
+          <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-400">
             Help your campus community
           </p>
 
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
             Report an item
           </h1>
 
-          <p className="mt-3 leading-7 text-slate-600">
+          <p className="mt-3 leading-7 text-slate-600 dark:text-slate-400">
             Lost something or found an item on campus? Share the details to
             help it find its way to the right person.
           </p>
@@ -235,10 +242,10 @@ export default function ReportPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+          className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900 sm:p-8"
         >
           <div>
-            <label className="mb-2 block text-sm font-semibold">
+            <label className={labelClass}>
               What are you reporting?
             </label>
 
@@ -251,8 +258,8 @@ export default function ReportPage() {
                   key={option.value}
                   className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition ${
                     form.item_type === option.value
-                      ? "border-blue-600 bg-blue-50 text-blue-800"
-                      : "border-slate-200 hover:border-slate-300"
+                      ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-blue-500 dark:bg-blue-950 dark:text-blue-300"
+                      : "border-slate-200 text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500"
                   }`}
                 >
                   <input
@@ -271,10 +278,7 @@ export default function ReportPage() {
           </div>
 
           <div>
-            <label
-              className="mb-2 block text-sm font-semibold"
-              htmlFor="title"
-            >
+            <label className={labelClass} htmlFor="title">
               Item name
             </label>
 
@@ -287,15 +291,12 @@ export default function ReportPage() {
               minLength={3}
               maxLength={120}
               placeholder="e.g. Stainless steel water bottle"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              className={inputClass}
             />
           </div>
 
           <div>
-            <label
-              className="mb-2 block text-sm font-semibold"
-              htmlFor="description"
-            >
+            <label className={labelClass} htmlFor="description">
               Description
             </label>
 
@@ -309,16 +310,13 @@ export default function ReportPage() {
               maxLength={2000}
               rows={4}
               placeholder="Describe the item and any identifying details."
-              className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              className={`${inputClass} resize-y`}
             />
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label
-                className="mb-2 block text-sm font-semibold"
-                htmlFor="category"
-              >
+              <label className={labelClass} htmlFor="category">
                 Category
               </label>
 
@@ -328,7 +326,7 @@ export default function ReportPage() {
                 value={form.category}
                 onChange={handleChange}
                 required
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                className={inputClass}
               >
                 {categories.map((category) => (
                   <option key={category} value={category}>
@@ -339,10 +337,7 @@ export default function ReportPage() {
             </div>
 
             <div>
-              <label
-                className="mb-2 block text-sm font-semibold"
-                htmlFor="location"
-              >
+              <label className={labelClass} htmlFor="location">
                 Campus location
               </label>
 
@@ -355,18 +350,17 @@ export default function ReportPage() {
                 minLength={2}
                 maxLength={120}
                 placeholder="e.g. Library, Level 2"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                className={inputClass}
               />
             </div>
           </div>
 
           <div>
-            <label
-              htmlFor="item_image"
-              className="mb-2 block text-sm font-semibold"
-            >
+            <label htmlFor="item_image" className={labelClass}>
               Item photo{" "}
-              <span className="font-normal text-slate-500">(optional)</span>
+              <span className="font-normal text-slate-500 dark:text-slate-400">
+                (optional)
+              </span>
             </label>
 
             <input
@@ -376,30 +370,30 @@ export default function ReportPage() {
               accept="image/jpeg,image/png,image/webp"
               onChange={handleImageChange}
               disabled={loading}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-semibold file:text-blue-700"
+              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-semibold file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:file:bg-blue-950 dark:file:text-blue-300 dark:hover:file:bg-blue-900"
             />
 
-            <p className="mt-2 text-xs leading-5 text-slate-500">
+            <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
               Choose a JPG, PNG, or WebP image. Maximum size: 5 MB.
             </p>
 
             {imagePreview && (
-              <div className="mt-4">
-                <p className="mb-2 text-sm font-medium text-slate-700">
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                <p className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">
                   Image preview
                 </p>
 
                 <img
                   src={imagePreview}
                   alt="Preview of selected item"
-                  className="max-h-64 w-auto max-w-full rounded-xl border border-slate-200 object-contain"
+                  className="max-h-64 w-auto max-w-full rounded-xl border border-slate-200 object-contain dark:border-slate-600"
                 />
 
                 <button
                   type="button"
                   onClick={clearSelectedImage}
                   disabled={loading}
-                  className="mt-2 text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                  className="mt-3 text-sm font-semibold text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
                 >
                   Remove photo
                 </button>
@@ -410,7 +404,7 @@ export default function ReportPage() {
           {error && (
             <div
               role="alert"
-              className="rounded-xl bg-red-50 p-4 text-sm text-red-700"
+              className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
             >
               <p>{error}</p>
 
@@ -437,12 +431,15 @@ export default function ReportPage() {
           {success && (
             <div
               role="status"
-              className="rounded-xl bg-green-50 p-4 text-sm text-green-800"
+              className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-300"
             >
               {success}
 
               <div className="mt-3">
-                <Link href="/" className="font-semibold underline">
+                <Link
+                  href="/"
+                  className="font-semibold underline"
+                >
                   Return to listings →
                 </Link>
               </div>
@@ -452,7 +449,7 @@ export default function ReportPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-blue-700 px-5 py-3.5 font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl bg-blue-700 px-5 py-3.5 font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-500"
           >
             {loading
               ? uploadingImage
@@ -461,7 +458,7 @@ export default function ReportPage() {
               : "Submit report"}
           </button>
 
-          <p className="text-center text-xs leading-5 text-slate-500">
+          <p className="text-center text-xs leading-5 text-slate-500 dark:text-slate-400">
             Please do not include passwords, private documents, or other
             sensitive personal information in your report.
           </p>

@@ -28,6 +28,12 @@ const emptyForm = {
   image_url: "",
 };
 
+const inputClass =
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400";
+
+const secondaryButtonClass =
+  "rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700";
+
 export default function MyReportsPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -411,12 +417,12 @@ export default function MyReportsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
+    <main className="min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
+      <header className="border-b border-slate-200 bg-white transition-colors dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
           <Link
             href="/"
-            className="text-2xl font-bold tracking-tight text-blue-700"
+            className="text-2xl font-bold tracking-tight text-blue-700 dark:text-blue-400"
           >
             CampusFind
           </Link>
@@ -424,19 +430,21 @@ export default function MyReportsPage() {
           <nav className="flex flex-wrap items-center gap-3 text-sm font-medium">
             <Link
               href="/"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-slate-600 hover:bg-slate-100 dark:border-gray-600"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-slate-600 transition-colors hover:bg-slate-100 dark:border-gray-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Home
             </Link>
+
             <Link
               href="/report"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-slate-600 hover:bg-slate-100 dark:border-gray-600"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-slate-600 transition-colors hover:bg-slate-100 dark:border-gray-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Report an item
             </Link>
+
             <button
               onClick={handleLogout}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-100"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Log out
             </button>
@@ -446,13 +454,15 @@ export default function MyReportsPage() {
 
       <section className="mx-auto max-w-6xl px-5 py-10 sm:py-14">
         <div className="mb-8">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-blue-700">
+          <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-400">
             Your CampusFind activity
           </p>
+
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             My Reports
           </h1>
-          <p className="mt-3 max-w-2xl leading-7 text-slate-600">
+
+          <p className="mt-3 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
             View and manage the lost and found items you have reported.
           </p>
         </div>
@@ -472,6 +482,7 @@ export default function MyReportsPage() {
             className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 transition-colors dark:border-red-800 dark:bg-red-950/50 dark:text-red-300"
           >
             <p>{error}</p>
+
             {error.toLowerCase().includes("log in") && (
               <Link
                 href="/login"
@@ -484,19 +495,22 @@ export default function MyReportsPage() {
         )}
 
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             Loading your reports...
           </div>
         ) : !error && items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-900">
             <div className="mb-4 text-4xl">📋</div>
+
             <h2 className="text-xl font-bold">No reports yet</h2>
-            <p className="mt-2 text-slate-600">
+
+            <p className="mt-2 text-slate-600 dark:text-slate-400">
               Your submitted reports will appear here.
             </p>
+
             <Link
               href="/report"
-              className="mt-6 inline-flex rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800"
+              className="mt-6 inline-flex rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white transition-colors hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
             >
               Create a report
             </Link>
@@ -505,12 +519,13 @@ export default function MyReportsPage() {
           !error && (
             <>
               <div className="mb-5 flex items-center justify-between gap-3">
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
                   {items.length} {items.length === 1 ? "report" : "reports"}
                 </p>
+
                 <Link
                   href="/report"
-                  className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                  className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
                 >
                   + New report
                 </Link>
@@ -520,16 +535,16 @@ export default function MyReportsPage() {
                 {items.map((item) => (
                   <article
                     key={item.id}
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900"
                   >
                     {item.image_url ? (
                       <img
                         src={item.image_url}
                         alt={item.title}
-                        className="h-44 w-full bg-slate-100 object-cover"
+                        className="h-44 w-full bg-slate-100 object-cover dark:bg-slate-800"
                       />
                     ) : (
-                      <div className="flex h-32 items-center justify-center bg-slate-100 text-4xl">
+                      <div className="flex h-32 items-center justify-center bg-slate-100 text-4xl dark:bg-slate-800">
                         {item.item_type === "lost" ? "🔎" : "🎒"}
                       </div>
                     )}
@@ -539,16 +554,27 @@ export default function MyReportsPage() {
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${
                             item.item_type === "lost"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-green-50 text-green-700"
+                              ? "bg-red-50 text-red-700 dark:bg-red-400/15 dark:text-red-300"
+                              : "bg-green-50 text-green-700 dark:bg-green-400/15 dark:text-green-300"
                           }`}
                         >
                           {item.item_type === "lost"
                             ? "Lost item"
                             : "Found item"}
                         </span>
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                          {item.status || "open"}
+
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            item.status === "resolved"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"
+                              : item.status === "recovery_pending"
+                                ? "bg-amber-50 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300"
+                                : "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          {(item.status || "open")
+                            .replaceAll("_", " ")
+                            .replace(/\b\w/g, (letter) => letter.toUpperCase())}
                         </span>
                       </div>
 
@@ -559,10 +585,11 @@ export default function MyReportsPage() {
                           <div>
                             <label
                               htmlFor={`title-${item.id}`}
-                              className="mb-1 block text-sm font-medium"
+                              className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300"
                             >
                               Item name
                             </label>
+
                             <input
                               id={`title-${item.id}`}
                               name="title"
@@ -571,17 +598,18 @@ export default function MyReportsPage() {
                               required
                               minLength={3}
                               maxLength={120}
-                              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                              className={inputClass}
                             />
                           </div>
 
                           <div>
                             <label
                               htmlFor={`description-${item.id}`}
-                              className="mb-1 block text-sm font-medium"
+                              className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300"
                             >
                               Description
                             </label>
+
                             <textarea
                               id={`description-${item.id}`}
                               name="description"
@@ -591,23 +619,24 @@ export default function MyReportsPage() {
                               minLength={5}
                               maxLength={2000}
                               rows={3}
-                              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                              className={inputClass}
                             />
                           </div>
 
                           <div>
                             <label
                               htmlFor={`type-${item.id}`}
-                              className="mb-1 block text-sm font-medium"
+                              className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300"
                             >
                               Report type
                             </label>
+
                             <select
                               id={`type-${item.id}`}
                               name="item_type"
                               value={form.item_type}
                               onChange={handleChange}
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                              className={inputClass}
                             >
                               <option value="lost">Lost item</option>
                               <option value="found">Found item</option>
@@ -617,22 +646,24 @@ export default function MyReportsPage() {
                           <div>
                             <label
                               htmlFor={`category-${item.id}`}
-                              className="mb-1 block text-sm font-medium"
+                              className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300"
                             >
                               Category
                             </label>
+
                             <select
                               id={`category-${item.id}`}
                               name="category"
                               value={form.category}
                               onChange={handleChange}
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                              className={inputClass}
                             >
                               {!categories.includes(form.category) && (
                                 <option value={form.category}>
                                   {form.category}
                                 </option>
                               )}
+
                               {categories.map((category) => (
                                 <option key={category} value={category}>
                                   {category}
@@ -644,10 +675,11 @@ export default function MyReportsPage() {
                           <div>
                             <label
                               htmlFor={`location-${item.id}`}
-                              className="mb-1 block text-sm font-medium"
+                              className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300"
                             >
                               Campus location
                             </label>
+
                             <input
                               id={`location-${item.id}`}
                               name="location"
@@ -656,14 +688,14 @@ export default function MyReportsPage() {
                               required
                               minLength={2}
                               maxLength={120}
-                              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                              className={inputClass}
                             />
                           </div>
 
                           <div>
                             <label
                               htmlFor={`image-${item.id}`}
-                              className="mb-2 block text-sm font-medium"
+                              className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300"
                             >
                               Report image (optional)
                             </label>
@@ -673,21 +705,21 @@ export default function MyReportsPage() {
                                 <img
                                   src={imagePreview}
                                   alt="Selected report preview"
-                                  className="h-44 w-full rounded-xl border border-slate-200 bg-slate-100 object-contain"
+                                  className="h-44 w-full rounded-xl border border-slate-200 bg-slate-100 object-contain dark:border-slate-700 dark:bg-slate-800"
                                 />
 
                                 <button
                                   type="button"
                                   onClick={handleRemoveImage}
                                   disabled={saving}
-                                  className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                                  className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/50"
                                 >
                                   Remove image
                                 </button>
                               </div>
                             ) : (
-                              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center">
-                                <p className="text-sm text-slate-600">
+                              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center dark:border-slate-700 dark:bg-slate-800">
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
                                   No image selected.
                                 </p>
                               </div>
@@ -695,7 +727,7 @@ export default function MyReportsPage() {
 
                             <label
                               htmlFor={`image-${item.id}`}
-                              className="mt-3 inline-flex cursor-pointer rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+                              className="mt-3 inline-flex cursor-pointer rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                             >
                               {selectedImage
                                 ? "Choose another image"
@@ -713,7 +745,7 @@ export default function MyReportsPage() {
                               className="sr-only"
                             />
 
-                            <p className="mt-2 text-xs leading-5 text-slate-500">
+                            <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                               JPEG, PNG or WebP. Maximum file size: 5 MB.
                               Your changes take effect when you save the report.
                             </p>
@@ -723,7 +755,7 @@ export default function MyReportsPage() {
                             <button
                               type="submit"
                               disabled={saving}
-                              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
+                              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-800 disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-500"
                             >
                               {uploadingImage
                                 ? "Uploading image..."
@@ -731,11 +763,12 @@ export default function MyReportsPage() {
                                   ? "Saving..."
                                   : "Save changes"}
                             </button>
+
                             <button
                               type="button"
                               onClick={cancelEditing}
                               disabled={saving}
-                              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
+                              className={`${secondaryButtonClass} disabled:opacity-60`}
                             >
                               Cancel
                             </button>
@@ -749,26 +782,29 @@ export default function MyReportsPage() {
                           >
                             {item.title} →
                           </Link>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">
                             {item.description}
                           </p>
 
-                          <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-sm text-slate-600">
+                          <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
                             <p>
-                              <strong className="text-slate-800">
+                              <strong className="text-slate-800 dark:text-slate-100">
                                 Category:
                               </strong>{" "}
                               {item.category}
                             </p>
+
                             <p>
-                              <strong className="text-slate-800">
+                              <strong className="text-slate-800 dark:text-slate-100">
                                 Location:
                               </strong>{" "}
                               {item.location}
                             </p>
+
                             {item.created_at && (
                               <p>
-                                <strong className="text-slate-800">
+                                <strong className="text-slate-800 dark:text-slate-100">
                                   Reported:
                                 </strong>{" "}
                                 {new Date(item.created_at).toLocaleDateString()}
@@ -776,7 +812,7 @@ export default function MyReportsPage() {
                             )}
                           </div>
 
-                          <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                          <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-700">
                             <button
                               type="button"
                               onClick={() => handleStatusChange(item)}
@@ -823,3 +859,4 @@ export default function MyReportsPage() {
     </main>
   );
 }
+

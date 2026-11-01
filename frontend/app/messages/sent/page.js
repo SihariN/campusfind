@@ -37,120 +37,141 @@ export default function SentMessagesPage() {
   }, [loadMessages, router]);
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100 sm:py-10">
+      <div className="mx-auto w-full max-w-4xl">
+
+        {/* Navigation */}
+        <div className="mb-7 flex flex-wrap items-center gap-3">
+          <Link
+            href="/"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+          >
+            <span aria-hidden="true" className="text-lg">←</span>
+            Back to CampusFind Home
+          </Link>
+
+          <Link
+            href="/messages/inbox"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-500 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+          >
+            ← Back to inbox
+          </Link>
+        </div>
+
+        {/* Page heading */}
         <div>
           <p className="text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
             CampusFind
           </p>
 
-          <h1 className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">
             Sent Messages
           </h1>
 
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-slate-600 dark:text-slate-400">
             Keep track of messages you have sent to reporters.
           </p>
         </div>
 
-        <Link
-          href="/messages/inbox"
-          className="inline-flex w-fit items-center justify-center rounded-xl border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-        >
-          ← Back to inbox
-        </Link>
-      </div>
-
-      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-        <p className="font-semibold text-gray-900 dark:text-white">
-          Your sent messages
-        </p>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {messages.length} {messages.length === 1 ? "message" : "messages"} sent
-        </p>
-      </div>
-
-      {error && (
-        <div
-          role="alert"
-          className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-        >
-          {error}
-          <button
-            type="button"
-            onClick={loadMessages}
-            className="ml-3 font-semibold underline"
-          >
-            Try again
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="py-12 text-center text-gray-500 dark:text-gray-400">
-          Loading sent messages...
-        </div>
-      ) : messages.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-gray-300 px-6 py-14 text-center dark:border-gray-700">
-          <div className="text-5xl" aria-hidden="true">
-            ✉️
-          </div>
-
-          <h2 className="mt-4 text-xl font-bold text-gray-900 dark:text-white">
-            No sent messages yet
-          </h2>
-
-          <p className="mx-auto mt-2 max-w-md text-gray-600 dark:text-gray-400">
-            When you contact someone about a listing, your message
-            will appear here.
+        {/* Message summary */}
+        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 transition-colors dark:border-slate-800 dark:bg-slate-900">
+          <p className="font-semibold text-slate-900 dark:text-white">
+            Your sent messages
           </p>
 
-          <Link
-            href="/"
-            className="mt-5 inline-flex rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {messages.length} {messages.length === 1 ? "message" : "messages"} sent
+          </p>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div
+            role="alert"
+            className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
           >
-            Browse listings
-          </Link>
-        </div>
-      ) : (
-        <div className="mt-6 space-y-4">
-          {messages.map((message) => (
-            <article
-              key={message.id}
-              className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
+            {error}
+
+            <button
+              type="button"
+              onClick={loadMessages}
+              className="ml-3 font-semibold underline"
             >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                  Sent
-                </span>
+              Try again
+            </button>
+          </div>
+        )}
 
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {message.created_at
-                    ? new Date(message.created_at).toLocaleString()
-                    : "Date unavailable"}
-                </span>
-              </div>
+        {/* Loading */}
+        {loading ? (
+          <div className="py-12 text-center text-slate-500 dark:text-slate-400">
+            Loading sent messages...
+          </div>
+        ) : messages.length === 0 ? (
+          /* Empty sent messages */
+          <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center dark:border-slate-700 dark:bg-slate-900">
+            <div className="text-5xl" aria-hidden="true">
+              ✉️
+            </div>
 
-              <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-                To {message.recipient_email || `User #${message.recipient_id}`}
-              </p>
+            <h2 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">
+              No sent messages yet
+            </h2>
 
-              <p className="mt-4 whitespace-pre-wrap break-words leading-7 text-gray-800 dark:text-gray-200">
-                {message.content}
-              </p>
+            <p className="mx-auto mt-2 max-w-md text-slate-600 dark:text-slate-400">
+              When you contact someone about a listing, your message
+              will appear here.
+            </p>
 
-              <div className="mt-5 border-t border-gray-200 pt-4 dark:border-gray-800">
-                <Link
-                  href={`/items/${message.item_id}`}
-                  className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-                >
-                  View related listing
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+            <Link
+              href="/"
+              className="mt-5 inline-flex rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white transition hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+            >
+              Browse listings
+            </Link>
+          </div>
+        ) : (
+          /* Sent messages */
+          <div className="mt-6 space-y-4">
+            {messages.map((message) => (
+              <article
+                key={message.id}
+                className="rounded-2xl border border-slate-200 bg-white p-5 transition-colors dark:border-slate-800 dark:bg-slate-900"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    Sent
+                  </span>
+
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {message.created_at
+                      ? new Date(message.created_at).toLocaleString()
+                      : "Date unavailable"}
+                  </span>
+                </div>
+
+                <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                  To {message.recipient_email || `User #${message.recipient_id}`}
+                </p>
+
+                <p className="mt-4 whitespace-pre-wrap break-words leading-7 text-slate-800 dark:text-slate-200">
+                  {message.content}
+                </p>
+
+                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700">
+                  <Link
+                    href={`/items/${message.item_id}`}
+                    className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+                  >
+                    View related listing
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
     </main>
   );
 }
+
