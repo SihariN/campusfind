@@ -8,6 +8,7 @@ import {
   getItems,
   getInbox,
   getUnreadNotificationCount,
+  getAdminProfile,
 } from "../lib/api";
 
 const categories = [
@@ -22,6 +23,9 @@ const categories = [
 export default function Home() {
   const [items, setItems] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [theme, setTheme] = useState("light");
   const [search, setSearch] = useState("");
   const [itemType, setItemType] = useState("");
@@ -36,10 +40,39 @@ export default function Home() {
 
   // Load saved login and theme preferences.
   useEffect(() => {
-    setIsLoggedIn(Boolean(localStorage.getItem("campusfind_token")));
+  const token = localStorage.getItem("campusfind_token");
 
-    const savedTheme = localStorage.getItem("campusfind_theme");
-    setTheme(savedTheme === "dark" ? "dark" : "light");
+  setIsLoggedIn(Boolean(token));
+
+  let cancelled = false;
+
+  async function verifyAdminAccess() {
+    if (!token) {
+      setIsAdmin(false);
+      return;
+    }
+
+    try {
+      await getAdminProfile();
+
+      if (!cancelled) {
+        setIsAdmin(true);
+      }
+    } catch (error) {
+      if (!cancelled) {
+        setIsAdmin(false);
+      }
+    }
+  }
+
+  verifyAdminAccess();
+
+  const savedTheme = localStorage.getItem("campusfind_theme");
+  setTheme(savedTheme === "dark" ? "dark" : "light");
+
+  return () => {
+    cancelled = true;
+  };
   }, []);
 
   // Apply the selected theme to the entire page.
@@ -167,12 +200,15 @@ useEffect(() => {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
       {/* Navigation */}
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 shadow-sm shadow-slate-900/[0.03] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-blue-700 to-indigo-800 text-2xl font-black text-white shadow-lg shadow-blue-700/25 ring-1 ring-white/20">
+      <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
+
+          {/* Brand */}
+          <Link href="/" className="flex shrink-0 items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-blue-700 to-indigo-800 text-2xl font-black text-white shadow-lg shadow-blue-700/25">
               C
             </span>
+
             <span>
               <span className="block text-xl font-black tracking-tight text-slate-950 dark:text-white">
                 CampusFind<span className="text-blue-600 dark:text-blue-400">.</span>
@@ -183,109 +219,154 @@ useEffect(() => {
             </span>
           </Link>
 
+          {/* Navigation links */}
           <nav
             aria-label="Main navigation"
-            className="flex w-full flex-wrap items-center gap-2 sm:gap-3 lg:w-auto"
+            className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end"
           >
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={
-                theme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
-              }
-              title={
-                theme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
-              }
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-lg transition hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
-            >
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
-
-            
             {isLoggedIn ? (
               <>
                 <Link
                   href="/my-reports"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-700/20 transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-800 hover:to-indigo-800 hover:shadow-lg hover:shadow-blue-700/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 dark:from-blue-600 dark:to-indigo-600 dark:hover:from-blue-500 dark:hover:to-indigo-500"
+                  className="inline-flex items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800"
                 >
                   My Reports
                 </Link>
 
                 <Link
                   href="/notifications"
-                  className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-800 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
-                  🔔 Notifications
-
+                  <span>🔔</span>
+                  <span>Notifications</span>
                   {unreadNotificationCount > 0 && (
-                    <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">
                       {unreadNotificationCount}
                     </span>
                   )}
                 </Link>
 
-                
                 <Link
                   href="/messages/inbox"
-                  className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-800 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
-                  ✉️ Messages
+                  <span>✉️</span>
+                  <span>Messages</span>
                   {unreadCount > 0 && (
-                    <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">
                       {unreadCount}
                     </span>
                   )}
                 </Link>
 
-                <Link
-                  href="/profile"
-                  className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-800 dark:hover:bg-slate-800"
-                >
-                  👤 Profile
-                </Link>
+                {/* Admin dropdown */}
+                {isAdmin && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminMenuOpen((open) => !open);
+                        setProfileMenuOpen(false);
+                      }}
+                      aria-expanded={adminMenuOpen}
+                      className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2.5 text-sm font-bold text-indigo-800 transition hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                    >
+                      <span>🛡️</span>
+                      <span>Admin</span>
+                      <span className="text-xs"> </span>
+                    </button>
 
+                    {adminMenuOpen && (
+                      <div className="absolute right-0 top-full z-[60] mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
+                        <Link
+                          href="/admin"
+                          onClick={() => setAdminMenuOpen(false)}
+                          className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-700 dark:text-slate-200 dark:hover:bg-indigo-950/60 dark:hover:text-indigo-300"
+                        >
+                          <span>📊</span>
+                          Admin Dashboard
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    localStorage.removeItem("campusfind_token");
-                    setIsLoggedIn(false);
-                    router.refresh();
-                  }}
-                  className="rounded-xl border border-slate-200/80 px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition-all duration-200 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-rose-900 dark:hover:bg-rose-950 dark:hover:text-rose-300"
-                >
-                  Log out
-                </button>
+                {/* Profile dropdown */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen((open) => !open);
+                      setAdminMenuOpen(false);
+                    }}
+                    aria-expanded={profileMenuOpen}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    <span>👤</span>
+                    <span>Account</span>
+                    <span className="text-xs"> </span>
+                  </button>
+
+                  {profileMenuOpen && (
+                    <div className="absolute right-0 top-full z-[60] mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
+                      <Link
+                        href="/profile"
+                        onClick={() => setProfileMenuOpen(false)}
+                        className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        <span>👤</span>
+                        My Profile
+                      </Link>
+
+                      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.removeItem("campusfind_token");
+                          setIsLoggedIn(false);
+                          setIsAdmin(false);
+                          setProfileMenuOpen(false);
+                          setAdminMenuOpen(false);
+                          router.refresh();
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                      >
+                        <span>↪</span>
+                        Log out
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <>
                 <Link
                   href="/login"
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-gray-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Log in
                 </Link>
 
                 <Link
                   href="/register"
-                  className="rounded-xl border border-blue-700 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-slate-800"
+                  className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800"
                 >
                   Sign up
                 </Link>
               </>
             )}
 
-
-            <Link
-              href="/report"
-              className="inline-flex items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+            {/* Theme toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
             >
-              + Report item
-            </Link>
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
           </nav>
         </div>
       </header>

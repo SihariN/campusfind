@@ -19,7 +19,9 @@ class Item(Base):
     nullable=True,
     )
 
-    owner: Mapped["User | None"] = relationship()
+    owner: Mapped["User | None"] = relationship(
+    foreign_keys=[user_id]
+    )   
 
     title: Mapped[str] = mapped_column(
         String(120), nullable=False
@@ -53,6 +55,29 @@ class Item(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+
+        # Admin moderation fields
+    is_removed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+
+    removed_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    removed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    removal_reason: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
     )
 
 

@@ -278,3 +278,139 @@ export async function changeMyPassword(passwordData) {
 
   return handleResponse(response, "Could not change your password.");
 }
+
+
+// ---------------------------------------------------------
+// ADMIN DASHBOARD API
+// ---------------------------------------------------------
+
+// Get the current administrator's profile and verify access.
+export async function getAdminProfile() {
+  const response = await fetch(`${API_BASE}/admin/me`, {
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(
+    response,
+    "Administrator access required."
+  );
+}
+
+// Get dashboard statistics.
+export async function getAdminDashboardStats() {
+  const response = await fetch(
+    `${API_BASE}/admin/dashboard/stats`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  return handleResponse(
+    response,
+    "Could not load dashboard statistics."
+  );
+}
+
+// Get recent platform activity.
+export async function getAdminRecentActivity(limit = 15) {
+  const response = await fetch(
+    `${API_BASE}/admin/dashboard/activity?limit=${limit}`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  return handleResponse(
+    response,
+    "Could not load recent activity."
+  );
+}
+
+// Get listings with optional filters and pagination.
+export async function getAdminListings({
+  item_type = "",
+  status = "",
+  search = "",
+  skip = 0,
+  limit = 10,
+} = {}) {
+  const params = new URLSearchParams();
+
+  if (item_type) params.set("item_type", item_type);
+  if (status) params.set("status", status);
+  if (search) params.set("search", search);
+
+  params.set("skip", String(skip));
+  params.set("limit", String(limit));
+
+  const response = await fetch(
+    `${API_BASE}/admin/listings?${params.toString()}`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  return handleResponse(
+    response,
+    "Could not load admin listings."
+  );
+}
+
+
+// Get users for the administrator dashboard.
+export async function getAdminUsers(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.set(key, String(value));
+    }
+  }
+
+  const query = searchParams.toString();
+  const url = `${API_BASE}/admin/users${query ? `?${query}` : ""}`;
+
+  const response = await fetch(url, {
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response, "Could not load users.");
+}
+
+// Update a user's role (administrator only).
+export async function updateAdminUserRole(userId, newRole) {
+  const params = new URLSearchParams({
+    new_role: newRole,
+  });
+
+  const response = await fetch(
+    `${API_BASE}/admin/users/${userId}/role?${params.toString()}`,
+    {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  return handleResponse(response, "Could not update user role.");
+}
+
+export async function removeAdminListing(itemId, reason) {
+  const params = new URLSearchParams({ reason });
+
+  const response = await fetch(
+    `${API_BASE}/admin/listings/${itemId}?${params.toString()}`,
+    {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  return handleResponse(response, "Could not remove listing.");
+}

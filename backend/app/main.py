@@ -15,7 +15,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 
-from sqlalchemy import select, text, func
+from sqlalchemy import select, text, func, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -278,6 +278,10 @@ def get_admin_listings(
             "user_id": item.user_id,
             "owner_email": owner.email if owner else None,
             "owner_name": owner.full_name if owner else None,
+            "is_removed": item.is_removed,
+            "removed_by": item.removed_by,
+            "removed_at": item.removed_at,
+            "removal_reason": item.removal_reason,
         })
 
     return {
@@ -287,6 +291,198 @@ def get_admin_listings(
         "listings": results,
     }
 
+@app.delete("/admin/listings/{item_id}")
+def remove_admin_listing(
+    item_id: int,
+    db: DbSession,
+    current_admin: Annotated[
+        User,
+        Depends(get_current_admin),
+    ],
+    reason: str = Query(..., min_length=5, max_length=500),
+):
+    item = db.get(Item, item_id)
+
+    if item is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Listing not found.",
+        )
+
+    if item.is_removed:
+        raise HTTPException(
+            status_code=400,
+            detail="This listing has already been removed.",
+        )
+
+    clean_reason = reason.strip()
+
+    if len(clean_reason) < 5:
+        raise HTTPException(
+            status_code=422,
+            detail="Please provide a removal reason of at least 5 characters.",
+        )
+
+    item.is_removed = True
+    item.removed_by = current_admin.id
+    item.removed_at = datetime.now(timezone.utc)
+    item.removal_reason = clean_reason
+
+    try:
+        db.commit()
+        db.refresh(item)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not remove listing.",
+        )
+
+    return {
+        "message": "Listing removed successfully.",
+        "item_id": item.id,
+        "removed_by": current_admin.id,
+        "removed_at": item.removed_at,
+        "reason": item.removal_reason,
+    }
+
+@app.get("/admin/users")
+def get_admin_users(
+    skip: int = 0,
+    limit: int = 10,
+    search: str | None = None,
+    role: str | None = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    query = db.query(User)
+
+    # Search by name or email
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                User.full_name.ilike(search_term),
+                User.email.ilike(search_term),
+            )
+        )
+
+    # Filter by role
+    if role:
+        if role not in ["user", "admin"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid role filter.",
+            )
+
+        query = query.filter(User.role == role)
+
+    total = query.count()
+
+    users = (
+        query
+        .order_by(User.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+
+    for user in users:
+        lost_reports = db.query(Item).filter(
+            Item.user_id == user.id,
+            Item.item_type == "lost",
+        ).count()
+
+        found_reports = db.query(Item).filter(
+            Item.user_id == user.id,
+            Item.item_type == "found",
+        ).count()
+
+        results.append({
+            "id": user.id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "profile_picture_url": user.profile_picture_url,
+            "created_at": user.created_at,
+            "total_reports": lost_reports + found_reports,
+            "lost_reports": lost_reports,
+            "found_reports": found_reports,
+        })
+
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "users": results,
+    }
+
+
+@app.patch("/admin/users/{user_id}/role")
+def update_user_role(
+    user_id: int,
+    new_role: str,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    # Validate the requested role
+    if new_role not in ["user", "admin"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Role must be either 'user' or 'admin'.",
+        )
+
+    # Prevent administrators from changing their own role
+    if user_id == current_admin.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot change your own administrator role.",
+        )
+
+    # Find the target user
+    target_user = db.query(User).filter(
+        User.id == user_id
+    ).first()
+
+    if not target_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found.",
+        )
+
+    # Prevent demotion of the last administrator
+    if target_user.role == "admin" and new_role == "user":
+        admin_count = db.query(User).filter(
+            User.role == "admin"
+        ).count()
+
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="The last administrator cannot be demoted.",
+            )
+
+    # Update the role
+    target_user.role = new_role
+
+    try:
+        db.commit()
+        db.refresh(target_user)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not update user role.",
+        )
+
+    return {
+        "message": "User role updated successfully.",
+        "user_id": target_user.id,
+        "email": target_user.email,
+        "role": target_user.role,
+    }
 # ---------------------------------------------------------
 # ADMIN RECENT ACTIVITY
 # ---------------------------------------------------------
@@ -408,7 +604,10 @@ def list_items(
     category: str | None = Query(default=None, max_length=50),
     search: str | None = Query(default=None, max_length=100),
 ):
-    statement = select(Item).where(Item.status == "open")
+    statement = select(Item).where(
+    Item.status == "open",
+    Item.is_removed.is_(False),
+    )
 
     if item_type:
         statement = statement.where(Item.item_type == item_type)
@@ -440,11 +639,11 @@ def get_item_matches(
 ):
     item = db.get(Item, item_id)
 
-    if item is None:
+    if item is None or item.is_removed:
         raise HTTPException(
-            status_code=404,
-            detail="Item not found.",
-        )
+        status_code=404,
+        detail="Item not found.",
+    )
 
     # Return 404 to avoid revealing another user's report.
     if item.user_id != current_user.id:
@@ -470,6 +669,7 @@ def get_item_matches(
         .where(
             Item.item_type == "found",
             Item.status == "open",
+            Item.is_removed.is_(False),
             Item.user_id != current_user.id,
         )
     )
@@ -616,10 +816,10 @@ def get_my_items(
 def get_item(item_id: int, db: DbSession):
     item = db.get(Item, item_id)
 
-    if item is None:
+    if item is None or item.is_removed:
         raise HTTPException(
             status_code=404,
-            detail="Item not found",
+            detail="Item not found.",
         )
 
     return item
