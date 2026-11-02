@@ -418,39 +418,6 @@ export default function MyReportsPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
-      <header className="border-b border-slate-200 bg-white transition-colors dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
-          <Link
-            href="/"
-            className="text-2xl font-bold tracking-tight text-blue-700 dark:text-blue-400"
-          >
-            CampusFind
-          </Link>
-
-          <nav className="flex flex-wrap items-center gap-3 text-sm font-medium">
-            <Link
-              href="/"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-slate-600 transition-colors hover:bg-slate-100 dark:border-gray-600 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Home
-            </Link>
-
-            <Link
-              href="/report"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-slate-600 transition-colors hover:bg-slate-100 dark:border-gray-600 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Report an item
-            </Link>
-
-            <button
-              onClick={handleLogout}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Log out
-            </button>
-          </nav>
-        </div>
-      </header>
 
       <section className="mx-auto max-w-6xl px-5 py-10 sm:py-14">
         <div className="mb-8">
@@ -537,17 +504,23 @@ export default function MyReportsPage() {
                     key={item.id}
                     className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900"
                   >
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={item.title}
-                        className="h-44 w-full bg-slate-100 object-cover dark:bg-slate-800"
-                      />
-                    ) : (
-                      <div className="flex h-32 items-center justify-center bg-slate-100 text-4xl dark:bg-slate-800">
-                        {item.item_type === "lost" ? "🔎" : "🎒"}
-                      </div>
-                    )}
+                    <Link
+                      href={`/items/${item.id}`}
+                      className="block cursor-pointer"
+                      aria-label={`View details for ${item.title}`}
+                    >
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.title}
+                          className="h-44 w-full bg-slate-100 object-cover transition-transform duration-300 hover:scale-[1.02] dark:bg-slate-800"
+                        />
+                      ) : (
+                        <div className="flex h-32 items-center justify-center bg-slate-100 text-4xl dark:bg-slate-800">
+                          {item.item_type === "lost" ? "🔎" : "🎒"}
+                        </div>
+                      )}
+                    </Link>
 
                     <div className="p-5">
                       <div className="mb-3 flex flex-wrap gap-2">
@@ -776,12 +749,21 @@ export default function MyReportsPage() {
                         </form>
                       ) : (
                         <>
-                          <Link
-                            href={`/items/${item.id}`}
-                            className="text-lg font-bold text-blue-700 hover:underline dark:text-blue-400"
-                          >
-                            {item.title} →
-                          </Link>
+                          <div className="flex items-start justify-between gap-3">
+                            <Link
+                              href={`/items/${item.id}`}
+                              className="min-w-0 text-lg font-bold text-blue-700 transition-colors hover:text-blue-900 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                            >
+                              {item.title}
+                            </Link>
+
+                            <Link
+                              href={`/items/${item.id}`}
+                              className="shrink-0 text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                            >
+                              View details →
+                            </Link>
+                          </div>
 
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">
                             {item.description}

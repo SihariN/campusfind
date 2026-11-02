@@ -41,7 +41,12 @@ function LoginForm() {
       }
 
       localStorage.setItem("campusfind_token", data.access_token);
+
+      // Notify the global Navbar that the user has logged in.
+      window.dispatchEvent(new Event("campusfind-auth-change"));
+
       router.push("/");
+      router.refresh();
     } catch (err) {
       setError(
         err.message || "Could not connect to the CampusFind server."
