@@ -877,7 +877,7 @@ async function handleRemoveListing(event) {
           </section>
 
           <footer className="mt-10 flex flex-col justify-between gap-2 border-t border-slate-200/80 py-6 text-xs text-slate-400 dark:border-slate-800 sm:flex-row">
-            <p>© {new Date().getFullYear()} CampusFind. All rights reserved.</p>
+            <p>© 2026 CampusFind. All rights reserved.</p>
             <p>Administrator workspace</p>
           </footer>
         </main>
