@@ -245,6 +245,7 @@ export default function AdminDashboard() {
 
     setTheme(nextTheme);
     localStorage.setItem("campusfind_theme", nextTheme);
+
     document.documentElement.classList.toggle(
       "dark",
       nextTheme === "dark"

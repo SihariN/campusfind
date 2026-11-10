@@ -76,7 +76,7 @@ export default function Navbar() {
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
@@ -109,64 +109,64 @@ export default function Navbar() {
   }, []);
 
   const syncAuthState = useCallback(async () => {
-  const token = localStorage.getItem("campusfind_token");
-  const loggedIn = Boolean(token);
+    const token = localStorage.getItem("campusfind_token");
+    const loggedIn = Boolean(token);
 
-  setIsLoggedIn(loggedIn);
+    setIsLoggedIn(loggedIn);
 
-  if (!loggedIn) {
-    setIsAdmin(false);
-    setUnreadMessages(0);
-    setUnreadNotifications(0);
-    return;
-  }
+    if (!loggedIn) {
+      setIsAdmin(false);
+      setUnreadMessages(0);
+      setUnreadNotifications(0);
+      return;
+    }
 
-  try {
-    await getAdminProfile();
-    setIsAdmin(true);
-  } catch {
-    setIsAdmin(false);
-  }
-}, []);
+    try {
+      await getAdminProfile();
+      setIsAdmin(true);
+    } catch {
+      setIsAdmin(false);
+    }
+  }, []);
 
-useEffect(() => {
-  const savedTheme = localStorage.getItem("campusfind_theme");
-  const initialTheme = savedTheme === "dark" ? "dark" : "light";
-
-  setTheme(initialTheme);
-  document.documentElement.classList.toggle(
-    "dark",
-    initialTheme === "dark"
-  );
-
-  syncAuthState();
-
-  const handleAuthChange = () => {
-    syncAuthState();
-  };
-
-  window.addEventListener("campusfind-auth-change", handleAuthChange);
-
-  return () => {
-    window.removeEventListener(
-      "campusfind-auth-change",
-      handleAuthChange
-    );
-  };
-}, [syncAuthState]);
-
+  // Load the saved theme whenever the route changes.
+  // This also picks up theme changes made inside the admin dashboard.
   useEffect(() => {
+    const savedTheme = localStorage.getItem("campusfind_theme");
+    const currentTheme = savedTheme === "dark" ? "dark" : "light";
+
+    setTheme(currentTheme);
+
     document.documentElement.classList.toggle(
       "dark",
-      theme === "dark"
+      currentTheme === "dark"
     );
-    localStorage.setItem("campusfind_theme", theme);
-  }, [theme]);
+  }, [pathname]);
 
+  // Keep the login and admin state synchronized.
+  useEffect(() => {
+    syncAuthState();
+
+    const handleAuthChange = () => {
+      syncAuthState();
+    };
+
+    window.addEventListener("campusfind-auth-change", handleAuthChange);
+
+    return () => {
+      window.removeEventListener(
+        "campusfind-auth-change",
+        handleAuthChange
+      );
+    };
+  }, [syncAuthState]);
+
+  // Close menus after navigating to another page.
   useEffect(() => {
     closeMenus();
   }, [pathname, closeMenus]);
 
+  // Load unread counts for logged-in users.
   useEffect(() => {
     if (!isLoggedIn) {
       setUnreadMessages(0);
@@ -183,13 +183,21 @@ useEffect(() => {
     };
   }, [isLoggedIn, loadUnreadCounts]);
 
+  // Apply and save the theme immediately when the user clicks the button.
   function toggleTheme() {
-    setTheme((current) =>
-      current === "dark" ? "light" : "dark"
+    const nextTheme = theme === "dark" ? "light" : "dark";
+
+    localStorage.setItem("campusfind_theme", nextTheme);
+
+    document.documentElement.classList.toggle(
+      "dark",
+      nextTheme === "dark"
     );
+
+    setTheme(nextTheme);
   }
 
-    function logout() {
+  function logout() {
     localStorage.removeItem("campusfind_token");
 
     window.dispatchEvent(new Event("campusfind-auth-change"));
@@ -202,7 +210,7 @@ useEffect(() => {
     closeMenus();
     router.push("/");
     router.refresh();
-    }
+  }
 
   const linkClass = (href) =>
     `flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
@@ -211,21 +219,20 @@ useEffect(() => {
         : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
     }`;
 
-    // Admin pages use their own dedicated sidebar and top bar.
-    if (pathname?.startsWith("/admin")) {
+  // Admin pages use their own dedicated sidebar and top bar.
+  if (pathname?.startsWith("/admin")) {
     return null;
-    }
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/95 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-8">
-
         <Brand />
 
         {/* Desktop navigation */}
         <nav
-        aria-label="Main navigation"
-        className="ml-auto hidden items-center gap-1 lg:flex"
+          aria-label="Main navigation"
+          className="ml-auto hidden items-center gap-1 lg:flex"
         >
           {isLoggedIn ? (
             <>
@@ -335,19 +342,21 @@ useEffect(() => {
             </Link>
           )}
 
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={
-              theme === "dark"
-                ? "Switch to light mode"
-                : "Switch to dark mode"
-            }
-            title={theme === "dark" ? "Light mode" : "Dark mode"}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
-          >
-            <Icon name={theme === "dark" ? "sun" : "moon"} />
-          </button>
+          {theme !== null && (
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={
+                theme === "dark"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              title={theme === "dark" ? "Light mode" : "Dark mode"}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              <Icon name={theme === "dark" ? "sun" : "moon"} />
+            </button>
+          )}
 
           {/* Mobile hamburger */}
           <button
@@ -368,8 +377,10 @@ useEffect(() => {
       {/* Mobile menu */}
       {mobileMenuOpen && (
         <div className="border-t border-slate-200 bg-white px-4 py-4 shadow-lg dark:border-slate-800 dark:bg-slate-950 lg:hidden">
-          <nav aria-label="Mobile navigation" className="mx-auto max-w-7xl space-y-1">
-
+          <nav
+            aria-label="Mobile navigation"
+            className="mx-auto max-w-7xl space-y-1"
+          >
             {isLoggedIn ? (
               <>
                 <Link href="/" className={linkClass("/")}>
@@ -381,19 +392,28 @@ useEffect(() => {
                   My Reports
                 </Link>
 
-                <Link href="/notifications" className={linkClass("/notifications")}>
+                <Link
+                  href="/notifications"
+                  className={linkClass("/notifications")}
+                >
                   <Icon name="bell" className="h-4 w-4" />
                   Notifications
                   <BadgeCount count={unreadNotifications} />
                 </Link>
 
-                <Link href="/messages/inbox" className={linkClass("/messages/inbox")}>
+                <Link
+                  href="/messages/inbox"
+                  className={linkClass("/messages/inbox")}
+                >
                   <Icon name="mail" className="h-4 w-4" />
                   Messages
                   <BadgeCount count={unreadMessages} />
                 </Link>
 
-                <Link href="/messages/sent" className={linkClass("/messages/sent")}>
+                <Link
+                  href="/messages/sent"
+                  className={linkClass("/messages/sent")}
+                >
                   Sent Messages
                 </Link>
 
