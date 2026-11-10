@@ -52,6 +52,9 @@ from app.auth import (
 from app.cloudinary_service import upload_image, upload_profile_picture
 from app.matching import calculate_match
 from datetime import datetime, timedelta, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------
 # APPLICATION SETUP
@@ -754,11 +757,14 @@ async def upload_item_image(
         image_url = upload_image(BytesIO(contents))
         return {"image_url": image_url}
 
-    except Exception:
+    except Exception as exc:
+        logger.exception("Cloudinary image upload failed: %s", exc)
+
         raise HTTPException(
             status_code=502,
             detail="Image upload failed. Please try again.",
-        )
+        ) from exc
+    
 
 
 # ---------------------------------------------------------
